@@ -1,0 +1,49 @@
+{
+  "name": "personal-information-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22.23.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "test": "pnpm build && node --test --test-concurrency=1 .build/tests/integration/local-persistence.test.js .build/tests/integration/save-status.test.js .build/tests/integration/reliable-save.test.js .build/tests/integration/workspace-initialization.test.js .build/tests/integration/domains.test.js .build/tests/integration/todo-review.test.js .build/tests/integration/todo-progress.test.js .build/tests/integration/todo-tree.test.js .build/tests/integration/conflicts.test.js .build/tests/integration/replication.test.js .build/tests/integration/mcp.test.js .build/tests/integration/export-scope.test.js .build/tests/integration/snapshot.test.js .build/tests/integration/archive.test.js .build/tests/integration/recovery.test.js .build/tests/integration/migration.test.js",
+    "test:electron": "pnpm build && node scripts/test-electron.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "demo:persistence": "pnpm build && node scripts/demo-persistence.mjs",
+    "demo:recovery": "pnpm build && node scripts/demo-recovery.mjs",
+    "build:status-demo": "pnpm build && node scripts/build-status-demo.mjs",
+    "demo:status": "pnpm build:status-demo && node scripts/run-status-demo.mjs",
+    "demo:workspace": "pnpm build:status-demo && node scripts/run-workspace.mjs",
+    "start:server": "pnpm build && node apps/server/dist/composition/main.js",
+    "test:status-ui": "pnpm build:status-demo && node --test tests/e2e/status-demo.test.mjs",
+    "test:workspace-ui": "pnpm build:status-demo && node --test --test-concurrency=1 tests/e2e/workspace-setup.test.mjs tests/e2e/workbench.test.mjs tests/e2e/todo-review.test.mjs tests/e2e/todo-progress.test.mjs tests/e2e/todo-tree.test.mjs tests/e2e/conflicts.test.mjs tests/e2e/replication.test.mjs tests/e2e/mcp-management.test.mjs tests/e2e/portability.test.mjs",
+    "check": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm test:electron && pnpm test:status-ui && pnpm test:workspace-ui && pnpm test:mcp && pnpm test:release",
+    "test:mcp": "pnpm build && node --test tests/e2e/mcp.test.mjs",
+    "build:release": "pnpm build:status-demo && node scripts/build-release.mjs",
+    "test:release": "pnpm build:release && node --test tests/e2e/release.test.mjs",
+    "start:mcp": "node apps/mcp/protocol/main.mjs"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@workspace/adapters": "workspace:*",
+    "@workspace/contracts": "workspace:*",
+    "@workspace/core": "workspace:*",
+    "@workspace/extension-sdk": "workspace:*",
+    "@workspace/server": "workspace:*",
+    "@workspace/todo-list": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "electron": "45.0.0",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.64.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "5.9.3"
+  }
+}

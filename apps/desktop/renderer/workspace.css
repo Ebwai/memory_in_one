@@ -1,0 +1,36 @@
+.workspace-form{margin-top:20px;max-width:750px}.workspace-form input,.workspace-form select{display:block;width:100%;padding:11px 13px;border:1px solid #d9e1e8;border-radius:7px;background:#fcfdff;color:#263344;font:inherit;margin-bottom:16px}.workspace-form input:focus,.workspace-form select:focus{outline:2px solid #8eb6dd;outline-offset:2px}.workspace-form p{color:#718092;font-size:12px}dt{font-size:12px;color:#718092;margin-top:18px}dd{margin:6px 0;padding:10px 14px;overflow-wrap:anywhere;background:#f6f8fb;border-radius:7px}button:not(.primary):not(.text-button){border:1px solid #d9e1e8;border-radius:6px;padding:8px 12px;background:white}p[role=alert]{color:#a14747!important;white-space:pre-wrap}
+
+textarea{box-sizing:border-box;display:block;width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;resize:vertical;background:#fff;color:#233349;margin:10px 0}label{display:block;margin-top:12px}article{padding:12px 0;border-bottom:1px solid #e4e9ef}article button{margin-right:8px}.capture-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:20px}.capture-toolbar strong{margin-right:auto}.todo-capture{max-width:700px}.capture-records{list-style:none;padding:0}.capture-records li{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px 4px;border-bottom:1px solid #e4e9ef}.floating main{padding:16px;max-width:none}.floating .page-heading,.floating .page-footer,.floating [data-testid="workspace-created"],.floating .binding-recheck{display:none}.floating [data-testid="domain-manager"]{margin:0;padding:16px}.floating [data-testid="domain-manager"]>:not(.todo-capture):not([aria-label="处理未保存输入"]){display:none}.floating .capture-toolbar{font-size:13px}.floating .capture-toolbar button{font-size:11px;padding:5px}
+
+.todo-review{margin-top:22px}.review-heading,.todo-detail header{display:flex;align-items:center;justify-content:space-between;gap:10px}.todo-review-list{max-height:320px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.capture-records li{display:flex;gap:10px;align-items:start}.capture-records li>div{min-width:0;flex:1}.capture-records input[type=checkbox]{flex:none;margin:6px 0}.capture-records button.todo-open{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;text-align:left;border:0;background:none;padding:0;width:100%;font:inherit;color:inherit;border-radius:2px}.todo-date{display:block;font-size:12px;color:#687d8e;margin-top:5px}.todo-date.overdue{color:#a24c38}.capture-records p[role=alert]{font-size:12px}.completed-toggle{margin:8px 0}.todo-detail-backdrop{position:fixed;inset:0;z-index:100;background:#152d4d55;display:flex;align-items:center;justify-content:center;padding:18px;overscroll-behavior:contain}.todo-detail{background:#fff;border-radius:12px;padding:20px;max-width:680px;width:100%;max-height:90vh;overflow:auto;overscroll-behavior:contain;box-shadow:0 15px 60px #132c4b33}.todo-full-text{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;background:#f5f7fa;border-radius:8px;margin-top:18px}.todo-detail dl{margin-bottom:20px}.todo-detail dd{white-space:pre-wrap}
+
+.todo-actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.todo-detail input[type=date]{padding:10px;font:inherit;max-width:100%;display:block}.todo-detail [data-testid=todo-editor],.todo-detail [data-testid=todo-delete-confirm]{border:1px solid #d8e1eb;background:#f7f9fc;border-radius:8px;padding:14px;margin:16px 0}.todo-detail [data-testid=todo-editor] button,.todo-detail [data-testid=todo-delete-confirm] button{margin:8px 8px 0 0}.delete-summary{white-space:pre-wrap;overflow-wrap:anywhere;font-weight:600}[aria-label="处理未保存输入"]{position:fixed;z-index:200;top:20%;left:5%;right:5%;max-width:600px;margin:auto;padding:24px;background:#fff;border:2px solid #b4c6d9;border-radius:10px;box-shadow:0 0 0 100vmax #20334b77}[aria-label="处理未保存输入"] button{margin-right:8px}
+
+.conflict-panel{margin:18px 0;padding:14px;border:1px solid #d8e1eb;border-radius:8px;background:#f8fafc}.conflict-panel h2{font-size:16px;margin:0}.conflict-panel h3{font-size:16px}.conflict-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;padding:12px;border-radius:6px;background:#fff;border:1px solid #e4e9ef}.conflict-panel fieldset{min-width:0;border:1px solid #cbd5e1;border-radius:6px;padding:12px;margin:12px 0}.conflict-panel button{margin:4px 6px 4px 0}.conflict-panel button[aria-pressed=true]{background:#e7eff9!important;border-color:#7193bd!important}.conflict-panel input[type=date]{display:block;padding:8px;max-width:100%;font:inherit}.conflict-panel [data-testid=conflict-details]{max-height:65vh;overflow:auto;overscroll-behavior:contain;padding-right:4px}
+
+.sync-status{padding:12px 16px;margin:12px 0;border:1px solid #d8e1eb;border-radius:8px;background:#f8fafc}.sync-status p{margin:0 0 8px}.sync-status small{display:block;color:#66788a;margin-bottom:6px}.sync-status button{font-size:12px}
+
+.floating [data-testid="mcp-management"],.floating [data-testid="export-scope"],.floating [data-testid="workspace-recovery"],.floating [data-testid="workspace-migration"]{display:none}
+[data-testid="workspace-migration"] input:not([type="checkbox"]),[data-testid="workspace-migration"] select,[data-testid="export-scope"] select{display:block;box-sizing:border-box;width:100%;padding:10px;margin:8px 0;border:1px solid #d9e1e8;border-radius:6px;font:inherit}
+[data-testid="workspace-migration"] button,[data-testid="workspace-recovery"] button{margin:6px 8px 6px 0}
+[data-testid="mcp-management"] input[type="checkbox"]{display:inline-block;width:auto;margin-right:8px}
+[data-testid="mcp-management"] pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf2f7;padding:12px}
+
+.todo-drag-handle,.todo-tree-toggle { padding: 3px 5px; flex: 0 0 auto; }
+.todo-drag-handle { cursor: grab; touch-action: none; }
+.todo-drag-handle:active { cursor: grabbing; }
+.capture-records li.todo-drop-before { border-top: 3px solid #4e69d8; }
+.capture-records li.todo-drop-after { border-bottom: 3px solid #4e69d8; }
+.capture-records li.todo-drop-inside { outline: 2px solid #4e69d8; background: #edf1ff; }
+.todo-root-drop { border: 2px dashed #7a89c2; border-radius: 8px; padding: 12px; margin: 8px 0; }
+.todo-review-list { overflow: auto; }
+
+.floating .conflict-panel[data-empty="true"] { display: none; }
+.floating #todo-text { height: 68px; min-height: 54px; padding: 8px; margin: 6px 0; }
+.floating .sync-status { padding: 8px 12px; margin: 6px 0; }
+.floating .capture-toolbar { margin-bottom: 8px; }
+.floating [data-testid="todo-save-status"] { margin: 6px 0; }
+.todo-review [data-testid="todo-list-loading"],.todo-review [data-testid="todo-progress-notice"] { margin: 2px 0; }
+.todo-root-drop { padding: 6px 10px; margin: 4px 0; font-size: 12px; }
+.todo-root-drop + p { min-height: 16px; margin: 4px 0; font-size: 12px; }
+.floating .todo-review { margin-top: 12px; }

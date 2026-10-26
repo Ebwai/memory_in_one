@@ -1,0 +1,4 @@
+- From workspace root in PowerShell: pnpm install --frozen-lockfile; pnpm build; pnpm check.
+- pnpm test runs actual-disk Node integration tests. pnpm test:electron runs the same tests in Electron embedded Node. pnpm check:boundaries enforces package imports.
+- pnpm demo:persistence writes its own mkdtemp directory, prints the path, and retains that demo data.
+- Windows temporary DB deletion requires closed handles/workers; do not clean existing user data directories.

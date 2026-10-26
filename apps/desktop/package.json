@@ -1,0 +1,19 @@
+{
+  "name": "@workspace/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/host/main.js",
+  "dependencies": {
+    "@workspace/todo-list": "workspace:*",
+    "@workspace/extension-sdk": "workspace:*",
+    "@workspace/server": "workspace:*",
+    "@workspace/contracts": "workspace:*",
+    "@workspace/core": "workspace:*",
+    "@workspace/adapters": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}
+

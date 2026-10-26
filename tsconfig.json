@@ -1,0 +1,23 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/todo-list" },
+    { "path": "packages/extension-sdk" },
+    { "path": "apps/server" },
+    { "path": "packages/ui" },
+    { "path": "apps/desktop" },
+    {
+      "path": "packages/contracts"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/adapters"
+    },
+    {
+      "path": "tests"
+    }
+  ]
+}
+

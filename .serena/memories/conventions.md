@@ -1,0 +1,4 @@
+- Product behavior belongs in per-concept PRD; architecture boundary changes in Architecture; multi-implementation transaction/recovery semantics in JIT TDD. Keep local invariants with types/validators/schema/tests.
+- Persistence result separates saved-local, known not-saved, and save-unconfirmed. After a dispatched request loses its reply, never assume rollback or blindly mint a new operation ID.
+- Content and immutable pending operation must commit atomically. Reads that fail must reject, not manufacture null/empty success. Deletion is a durable tombstone until later synchronization handles it.
+- Node built-in tests use independent temp DBs and real SQL faults/process termination. No task business shape in persistence fixtures.

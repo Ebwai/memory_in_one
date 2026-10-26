@@ -1,0 +1,10 @@
+{
+  "format": 1, "domainId": "example.reading", "name": "阅读摘录", "version": "1.0.0",
+  "hostApi": 1, "dataVersion": 1, "access": "own-domain",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+    "properties": { "quote": { "type": "string", "maxLength": 4000 }, "book": { "type": "string", "maxLength": 200 } },
+    "required": ["quote", "book"]
+  },
+  "view": { "titleField": "quote", "fields": ["quote", "book"] }, "actions": ["create", "update", "delete"]
+}

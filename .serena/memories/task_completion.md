@@ -1,0 +1,4 @@
+- Run pnpm check after relevant code changes: package import boundaries, TypeScript, real-disk tests on Node and Electron.
+- Run pnpm demo:persistence if changing the runnable demo or public save contract.
+- Record actual versions/results and limitations in the current PRD node/JIT TDD; update affected Architecture as-built. A passing runtime test is not installation/UI/sync/Agent compatibility proof.
+- Respect existing edits and data. Current workspace need not be a Git checkout; don't infer commit/PR delivery from local files.

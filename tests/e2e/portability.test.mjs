@@ -1,0 +1,93 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createRequire } from "node:module";
+import { _electron } from "playwright-core";
+const require = createRequire(import.meta.url);
+
+test("N56 local recovery can work offline in a new client without reconnecting the archived address", { timeout: 90000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), "workspace-local-recovery-ui-"));
+  const target = join(directory, "restored"), file = join(directory, "local.workspace.json");
+  await mkdir(target);
+  const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: join(directory, "original-client"), WORKSPACE_SETUP_HIDDEN: "1" }; delete env.ELECTRON_RUN_AS_NODE;
+  let app;
+  try {
+    app = await _electron.launch({ executablePath: require("electron"), args: ["apps/desktop/dist/host/workspace-main.js"], env });
+    let page = await app.firstWindow();
+    await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
+    await page.getByRole("button", { name: "确认创建", exact: true }).click();
+    await page.getByLabel("任务内容", { exact: true }).fill("从本机材料找回");
+    await page.getByRole("button", { name: "添加待办", exact: true }).click();
+    await page.getByTestId("captured-todo").getByText("从本机材料找回", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, file);
+    await page.evaluate(async () => { await window.workspaceSetup.exportFile("local"); });
+    await app.close(); app = undefined;
+    app = await _electron.launch({ executablePath: require("electron"), args: ["apps/desktop/dist/host/workspace-main.js"], env: { ...env, WORKSPACE_CLIENT_DIRECTORY: join(directory, "recovery-client") } });
+    page = await app.firstWindow();
+    await app.evaluate(({ dialog }, paths) => { const choices = [...paths]; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [choices.shift()] }); }, [file, target]);
+    const panel = page.getByTestId("workspace-recovery");
+    await panel.getByRole("button", { name: "选择材料与恢复目标", exact: true }).click();
+    await panel.getByRole("button", { name: "确认恢复到此空白目标", exact: true }).click();
+    await panel.getByRole("status").getByText(/恢复成功/).waitFor();
+    await panel.getByRole("button", { name: "使用恢复的本机进度", exact: true }).click();
+    await page.getByTestId("captured-todo").getByText("从本机材料找回", { exact: true }).waitFor();
+    await page.getByLabel("任务内容", { exact: true }).fill("恢复后继续离线记录");
+    await page.getByRole("button", { name: "添加待办", exact: true }).click();
+    await page.getByTestId("captured-todo").getByText("恢复后继续离线记录", { exact: true }).waitFor();
+    const binding = JSON.parse(await readFile(join(directory, "recovery-client/binding.json"), "utf8"));
+    assert.equal(binding.endpoint, ""); assert.equal(binding.secret, "");
+    assert.equal(binding.replicaPath, join(target, "replica.sqlite"));
+  } finally { await app?.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test("N51–N62 real desktop exports, restores and switches authority while keeping original pending task", { timeout: 90000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), "workspace-portability-ui-"));
+  const target = join(directory, "restored"), file = join(directory, "snapshot.workspace.json");
+  await mkdir(target);
+  const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: join(directory, "client"), WORKSPACE_SETUP_HIDDEN: "1" }; delete env.ELECTRON_RUN_AS_NODE;
+  const app = await _electron.launch({ executablePath: require("electron"), args: ["apps/desktop/dist/host/workspace-main.js"], env });
+  try {
+    const page = await app.firstWindow();
+    await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
+    await page.getByRole("button", { name: "确认创建", exact: true }).click();
+    await page.getByLabel("任务内容", { exact: true }).fill("迁移保留的内容");
+    await page.getByRole("button", { name: "添加待办", exact: true }).click();
+    await page.getByTestId("captured-todo").getByText("迁移保留的内容", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "立即同步", exact: true }).click();
+    await page.getByTestId("workspace-sync-status").getByText(/当前已保存改动已获统一位置确认/).waitFor();
+    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    const originalIdentity = await page.getByTestId("workspace-id").textContent();
+    const migration = page.getByTestId("workspace-migration");
+    await migration.getByRole("button", { name: "停止旧位置写入以开始迁移", exact: true }).click();
+    await migration.getByRole("status").getByText(/旧统一位置已停止写入/).waitFor();
+    await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, file);
+    const exp = page.getByTestId("export-scope");
+    await exp.getByRole("button", { name: "选择导出范围", exact: true }).click();
+    await exp.getByRole("button", { name: "查看所选来源范围", exact: true }).click();
+    await exp.getByRole("button", { name: "确认按此来源范围继续", exact: true }).click();
+    await exp.getByRole("button", { name: "生成快照并保存文件", exact: true }).click();
+    await exp.getByRole("alert").getByText(/导出完成/).waitFor();
+    assert.ok((await readFile(file, "utf8")).includes("workspace-snapshot"));
+    await app.evaluate(({ dialog }, paths) => { const choices = [...paths]; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [choices.shift()] }); }, [file, target]);
+    const recovery = page.getByTestId("workspace-recovery");
+    await recovery.getByRole("button", { name: "选择材料与恢复目标", exact: true }).click();
+    await recovery.getByTestId("recovery-preview").getByText(/来源：统一位置/).waitFor();
+    await recovery.getByRole("button", { name: "确认恢复到此空白目标", exact: true }).click();
+    await recovery.getByRole("status").getByText(/恢复成功/).waitFor();
+    await migration.getByLabel("迁移目标目录", { exact: true }).fill(target);
+    await migration.getByRole("button", { name: "确认切换到已恢复的新位置", exact: true }).click();
+    await migration.getByRole("status").getByText(/已切换到同一空间的新位置/).waitFor();
+    assert.equal(await page.getByTestId("workspace-id").textContent(), originalIdentity);
+    assert.equal(await page.getByTestId("workspace-location").textContent(), target);
+    await page.getByTestId("domain-builtin.todo").getByRole("button", { name: "进入领域", exact: true }).click();
+    await page.getByTestId("captured-todo").getByText("迁移保留的内容", { exact: true }).waitFor();
+    await page.getByLabel("任务内容", { exact: true }).fill("迁移后继续记录");
+    await page.getByRole("button", { name: "添加待办", exact: true }).click();
+    await page.getByRole("button", { name: "立即同步", exact: true }).click();
+    await page.getByTestId("workspace-sync-status").getByText(/当前已保存改动已获统一位置确认/).waitFor();
+    await page.screenshot({ path: ".build/portability.png", fullPage: true });
+  } finally { await app.close(); await rm(directory, { recursive: true, force: true }); }
+});

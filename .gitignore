@@ -1,0 +1,17 @@
+node_modules/
+**/dist/
+.build/
+*.tsbuildinfo
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+coverage/
+.serena/cache/
+.agent-asset-manager/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+

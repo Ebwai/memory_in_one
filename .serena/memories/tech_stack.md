@@ -1,0 +1,4 @@
+- TypeScript ESM workspace. packages/contracts is portable; packages/core depends on contracts; packages/adapters owns host APIs. Root tsconfig uses project references; emitted package files are dist, tests .build/tests.
+- node:sqlite synchronous API executes only inside a dedicated worker. Keep driver API out of core/UI/domain code. Electron uses its own Node version; check BOTH standalone Node and Electron built-in Node after runtime changes.
+- Version pins live in package.json/pnpm-lock.yaml, not memory. .npmrc scopes registry to official npm for reproducible resolution independent of global mirrors.
+- Electron runtime test is ELECTRON_RUN_AS_NODE, not a UI or installer E2E result.

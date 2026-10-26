@@ -1,0 +1,40 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "jsx": "react-jsx",
+    "types": [
+      "node",
+      "react"
+    ],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ]
+  },
+  "include": [
+    "host/**/*.ts",
+    "bridge/**/*.ts",
+    "renderer/**/*.ts",
+    "renderer/**/*.tsx"
+  ],
+  "references": [
+    { "path": "../../packages/todo-list" },
+    { "path": "../../packages/extension-sdk" },
+    { "path": "../server" },
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/adapters"
+    },
+    {
+      "path": "../../packages/ui"
+    }
+  ]
+}
+

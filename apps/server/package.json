@@ -1,0 +1,15 @@
+{
+  "name": "@workspace/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./initialization": { "types": "./dist/transport/server.d.ts", "import": "./dist/transport/server.js" } },
+  "dependencies": {
+    "@workspace/todo-list": "workspace:*",
+    "@workspace/extension-sdk": "workspace:*",
+    "@workspace/contracts": "workspace:*",
+    "@workspace/core": "workspace:*",
+    "@workspace/adapters": "workspace:*"
+  }
+}
+

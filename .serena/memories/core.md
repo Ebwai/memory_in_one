@@ -1,0 +1,4 @@
+- Product facts: docs/PRD.md links per-concept docs/prd; architecture map: docs/Architecture.md -> .claude/rules/architecture; JIT behavior navigation: docs/TDD.md -> .claude/rules/tdd.
+- Workflow is governed by .agents/skills/development-workflow/SKILL.md; complete one PRD node with as-built alignment before next. Do not prewrite all TDD.
+- todo-list is an independent domain; core contracts/persistence must not embed task fields. MCP serves external Agents; do not build an internal Agent.
+- Before host/driver changes read `mem:tech_stack`; before edits read `mem:conventions`; for actual commands read `mem:suggested_commands`; before delivery read `mem:task_completion`.
