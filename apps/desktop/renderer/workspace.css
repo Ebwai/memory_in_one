@@ -34,3 +34,5 @@ textarea{box-sizing:border-box;display:block;width:100%;padding:12px;border:1px 
 .todo-root-drop { padding: 6px 10px; margin: 4px 0; font-size: 12px; }
 .todo-root-drop + p { min-height: 16px; margin: 4px 0; font-size: 12px; }
 .floating .todo-review { margin-top: 12px; }
+
+.floating .app-update{display:none}.app-update progress{display:block;width:100%;margin:12px 0}.app-update details{margin:12px 0}.app-update details p{max-height:220px;overflow:auto}

@@ -73,6 +73,8 @@ flowchart LR
 
 MCP 桥接只在本机持有连接所需秘密；客户端配置示例不提交真实凭据。程序升级及卸载不把空间数据目录作为可随程序删除的临时文件。
 
+2026-10-28：deploy/desktop 持有独立更新助手；scripts/package-desktop.mjs 生成带版本与架构的 ZIP 及 SHA256。桌面更新只替换程序目录，保留完整旧目录备份，数据目录继续由原宿主管理。Release 标签、应用版本和根清单须一致；GitHub 附件摘要是下载校验来源，源码归档不参与更新。见 [桌面应用更新](../tdd/desktop-update.md)。
+
 ### 非功能约束
 
 N62 的 scripts/build-release.mjs 生成 Windows 便携客户端；2026-10-27 将 Node 服务构建拆到独立 scripts/build-server-release.mjs，无需 Electron 即可生成 Ubuntu tar.gz、Windows 服务目录及向后兼容的通用服务目录。deploy/server/ubuntu 与 windows 分别持有系统启动材料，复用同一服务实现。详见 [服务端部署 TDD](../tdd/server-deployment.md)。现有交付包含运行资源、MCP、扩展样例与使用指南；Windows 便携客户端可直接启动而无需开发依赖。交付可执行文件启动及重启验证见 release.test.mjs；实际平台范围见 docs/交付验收.md。

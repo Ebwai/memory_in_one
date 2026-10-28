@@ -24,6 +24,7 @@ export type ConnectionResult =
   | { readonly status: "rejected"; readonly message: string };
 export type DomainResponse = { readonly ok: false; readonly outcome?: "not-saved" | "unconfirmed"; readonly message: string } | { readonly ok: true; readonly conflicts?: readonly import("@workspace/contracts").RetainedConflict[]; readonly conflict?: import("@workspace/contracts").RetainedConflict; readonly message?: string; readonly domains?: readonly import("@workspace/contracts").DomainEntry[]; readonly save?: import("@workspace/contracts").LocalSaveResult; readonly workspaceId?: string; readonly record?: import("@workspace/contracts").LocalRecord | null; readonly records?: readonly import("@workspace/contracts").LocalRecord[]; readonly preview?: import("@workspace/contracts").ExtensionDefinition };
 export interface WorkspaceBridge {
+  update(action: import("./update-contracts.js").UpdateAction): Promise<import("./update-contracts.js").UpdateScreen>;
   migration(action: "status" | "stop" | "switch", target?: ConnectionForm & { isolated: boolean }): Promise<{ message: string; state?: string; binding?: WorkspaceBinding }>;
   recovery(action: "preview" | "restore" | "use-local", ticket?: string): Promise<{ ticket: string; summary: import("@workspace/adapters").RecoverySummary; binding?: WorkspaceBinding } | null>;
   exportFile(source: "authority" | "local"): Promise<{ cancelled: boolean; path?: string; capturedAt?: string }>;

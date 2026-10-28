@@ -1,3 +1,4 @@
+import { AppUpdate } from "./app-update.js";
 import { ExportScopePanel } from "./export-scope.js";
 import { McpManager } from "./mcp-manager.js";
 import { SyncStatus } from "./sync-status.js";
@@ -116,6 +117,7 @@ function App() {
       <button disabled={busy} onClick={() => { setConnecting(false); setVerified(null); setToken(""); }}>取消接入</button>
     </section>}
     {binding && <><SyncStatus /><DomainManager key={binding.workspace.workspaceId} /><McpManager /><ExportScopePanel /></>}
+    <AppUpdate />
     <RecoveryPanel onBinding={setBinding} />
     <MigrationPanel onBinding={setBinding} />
     <footer className="page-footer">空间身份独立于名称 · 原数据不会被创建动作覆盖</footer>

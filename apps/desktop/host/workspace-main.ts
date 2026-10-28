@@ -1,3 +1,6 @@
+import { DesktopUpdater, acknowledgeUpdate } from "./desktop-update.js";
+import { DESKTOP_VERSION } from "../bridge/update-contracts.js";
+import { dirname } from "node:path";
 import { describeExportScope } from "@workspace/core";
 import { installSyncFeatures } from "./sync-features.js";
 import { installDomainFeatures, provisionTodo } from "./domain-features.js";
@@ -25,6 +28,7 @@ let problem: string | null = null;
 let busy = false;
 let stopping = false;
 let stopped = false;
+let updater: DesktopUpdater | undefined;
 
 let connection: { ticket: string; target: PrivateBinding; token: string } | null = null;
 
@@ -408,9 +412,32 @@ app.whenReady().then(async () => {
       return attempted ? { status: "unconfirmed", message } : { status: "rejected", reason: "unavailable", message };
     } finally { busy = false; }
   });
+  const applicationRoot = dirname(process.execPath);
+  let updateAcknowledged = false;
+  let updateNotice: string | null = null;
+  updater = new DesktopUpdater({ version: app.isPackaged ? app.getVersion() : DESKTOP_VERSION, packaged: app.isPackaged,
+    root: applicationRoot, protectedPaths: () => [base, ...(binding ? [binding.replicaPath, ...(binding.kind === "local" ? [binding.location] : [])] : [])],
+    close: () => window.close() });
+  ipcMain.handle("workspace:update", async (event, action: unknown) => {
+    check(event);
+    if (!["status", "check", "download", "install"].includes(String(action))) throw new Error("无效更新动作。");
+    if (!updateAcknowledged) { updateAcknowledged = true; updateNotice = await acknowledgeUpdate(applicationRoot, app.getVersion()); }
+    if (action === "check") return updater!.check();
+    if (action === "download") return updater!.download();
+    if (action === "install") return updater!.install();
+    const state = updater!.status();
+    return updateNotice && state.phase === "idle" ? { ...state, message: updateNotice } : state;
+  });
   let closeAllowed = false;
   window.on("close", (event) => {
-    if (binding && !closeAllowed && !stopping) { event.preventDefault(); window.webContents.send("workspace:close-request"); }
+    if (binding && !closeAllowed && !stopping) { event.preventDefault(); window.webContents.send("workspace:close-request"); return; }
+    if (updater?.installationPending()) {
+      event.preventDefault();
+      void updater.launchInstaller().then(() => window.close()).catch((error: unknown) => {
+        closeAllowed = false;
+        updater?.installationFailed(error);
+      });
+    }
   });
   ipcMain.handle("workspace:window", (event, action: unknown) => {
     check(event);
