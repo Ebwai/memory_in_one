@@ -2,6 +2,7 @@ import { cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { build } from "esbuild";
+import { buildServerRelease } from "./build-server-release.mjs";
 
 const require = createRequire(import.meta.url);
 const root = resolve(".build/release/workspace-windows-v0.1.0");
@@ -21,12 +22,8 @@ await build({ entryPoints: ["apps/mcp/protocol/main.mjs"], outfile: join(applica
 await mkdir(join(application, "scripts"), { recursive: true });
 await cp("scripts/archive-cli.mjs", join(application, "scripts/archive-cli.mjs"));
 await cp("extensions", join(root, "扩展样例"), { recursive: true });
-await cp("docs/使用指南.md", join(root, "使用指南.md"));
+for (const document of ["使用指南.md", "Ubuntu服务器部署.md", "交付验收.md"]) await cp("docs/" + document, join(root, document));
 await writeFile(join(root, "启动服务.cmd"), '@echo off\r\nset "ELECTRON_RUN_AS_NODE=1"\r\n"%~dp0工作空间.exe" "%~dp0resources\\app\\apps\\server\\dist\\composition\\main.js"\r\n', "utf8");
 await writeFile(join(root, "恢复数据.cmd"), '@echo off\r\nset "ELECTRON_RUN_AS_NODE=1"\r\n"%~dp0工作空间.exe" "%~dp0resources\\app\\scripts\\archive-cli.mjs" %*\r\n', "utf8");
-const server = resolve(".build/release/workspace-server-v0.1.0");
-await mkdir(server, { recursive: true });
-await cp(application, server, { recursive: true });
-await writeFile(join(server, "package.json"), JSON.stringify({ name: "workspace-server", private: true, version: "0.1.0", type: "module", scripts: { start: "node apps/server/dist/composition/main.js" } }, null, 2));
-await cp("docs/使用指南.md", join(server, "使用指南.md"));
-console.log(JSON.stringify({ desktop: join(root, "工作空间.exe"), server, version: JSON.parse(await readFile(join(application, "package.json"), "utf8")).version }));
+const serverRelease = await buildServerRelease();
+console.log(JSON.stringify({ desktop: join(root, "工作空间.exe"), ...serverRelease, version: JSON.parse(await readFile(join(application, "package.json"), "utf8")).version }));

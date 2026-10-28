@@ -6,6 +6,8 @@ paths:
 
 # TDD 导航
 
+2026-10-27 接续：[Ubuntu 与 Windows 服务端交付](../.claude/rules/tdd/server-deployment.md)，承接既有统一位置初始化与服务端交付，不改变领域业务规则。
+
 Architecture 基线已于 2026-10-25 经用户确认。当前实现 N01–N70，含共享保存、领域生命周期、Windows 待办、真实同步、MCP 授权与动作，以及双来源导出、隔离恢复、统一位置迁移、Windows 便携交付和递归待办拖动组织。技术设计按节点建立并校准为实际实现。
 
 | 当前设计 | Architecture 位置 | PRD 锚点 |

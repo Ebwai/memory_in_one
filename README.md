@@ -70,6 +70,8 @@ N25 已完成上述路径的真实数据库与窗口整合验收。运行 `pnpm 
 
 ## 启动自管初始化服务
 
+2026-10-27 增加独立服务构建 `pnpm build:server`，无需构建 Electron。Ubuntu 分发包为 `.build/release/workspace-server-ubuntu-v0.1.0.tar.gz`，Windows 服务目录为 `.build/release/workspace-server-windows-v0.1.0`，旧通用路径保留。Ubuntu 上传、安装及 HTTPS 接入步骤见[部署指南](docs/Ubuntu服务器部署.md)。原生 Ubuntu 验收命令为 `pnpm test:ubuntu`（Windows 主机使用现有 Ubuntu WSL，不修改 WSL 系统配置）。
+
 准备好服务器、项目依赖及本地持久磁盘后，可用以下 PowerShell 示例启动。凭据由 Node 随机生成，需要通过自己的秘密管理方式提供给创建端，并在服务重启时沿用。
 
 ```powershell
@@ -81,7 +83,7 @@ pnpm start:server
 
 默认监听 127.0.0.1。远端访问由运维者提供 HTTPS 入口并反向代理到此服务；创建端仅接受公网 HTTPS，明确的回环地址可使用 HTTP。此功能不购买、部署或配置云资源。存放磁盘需支持硬链接与可靠刷新；不支持时不会降级为覆盖创建。
 
-目前实际验证 Windows 独立 Node 服务、回环 HTTP、Electron 创建与加密绑定恢复；未声称在阿里云、Linux 或公网 TLS 部署完成实测。服务已开放认证初始化、同步与 MCP 应用协议，接入授权和所有者权限分别校验。
+目前实际验证 Windows 独立 Node 服务及启动脚本、回环 HTTP、Electron 创建与加密绑定恢复，以及 WSL Ubuntu 22.04 x86_64 + Linux Node 22.23.4 的服务、同步、重启及恢复；未声称已在实际阿里云或公网 TLS 部署完成实测。Ubuntu 安装及 systemd 配置见 [部署指南](docs/Ubuntu服务器部署.md)，Windows 服务端继续保留。服务已开放认证初始化、同步与 MCP 应用协议，接入授权和所有者权限分别校验。
 
 ## 检查
 

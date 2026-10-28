@@ -1,0 +1,28 @@
+[Unit]
+Description=Personal information workspace server
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=personal-workspace
+Group=personal-workspace
+WorkingDirectory=/opt/personal-workspace/current
+EnvironmentFile=/etc/personal-workspace/server.env
+ExecStart=/opt/personal-workspace/current/deploy/server/ubuntu/start.sh
+ExecStartPost=/opt/personal-workspace/current/deploy/server/ubuntu/start.sh --check
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+StateDirectory=personal-workspace
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/personal-workspace
+
+[Install]
+WantedBy=multi-user.target

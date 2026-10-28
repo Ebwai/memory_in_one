@@ -73,7 +73,8 @@ export async function startWorkspaceServer(options: { directory: string; token: 
         });
         break;
       } catch (error) {
-        if (!options.port && (error as NodeJS.ErrnoException).code === "EADDRINUSE" && attempt < 31) continue;
+        // Windows may reserve otherwise-unused dynamic ports; retry only automatic selection.
+        if (!options.port && ["EADDRINUSE", "EACCES"].includes((error as NodeJS.ErrnoException).code ?? "") && attempt < 31) continue;
         throw error;
       }
     }

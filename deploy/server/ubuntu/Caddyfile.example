@@ -1,0 +1,4 @@
+# Replace this hostname, then merge with your existing Caddy configuration.
+todo.example.com {
+    reverse_proxy 127.0.0.1:43127
+}

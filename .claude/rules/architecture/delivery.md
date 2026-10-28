@@ -64,7 +64,7 @@ flowchart LR
 | 子目录 | 职责 |
 |---|---|
 | desktop/ | Windows 安装包、内置运行资源和更新时数据目录约定 |
-| server/ | Windows 直接运行、Linux 自管运行和可选容器部署说明 |
+| server/ | 独立服务发行：Ubuntu 安装与 systemd 托管、Windows 启动及恢复入口，程序与数据分离 |
 | mcp/ | stdio 服务分发及目标客户端配置示例 |
 
 ### 依赖与联动
@@ -75,7 +75,7 @@ MCP 桥接只在本机持有连接所需秘密；客户端配置示例不提交�
 
 ### 非功能约束
 
-N62 的 scripts/build-release.mjs 生成独立 Windows 便携客户端目录和 Node 服务目录，包含运行资源、MCP、扩展样例与使用指南；Windows 便携客户端可直接启动而无需开发依赖。交付可执行文件启动及重启验证见 release.test.mjs；实际平台范围见 docs/交付验收.md。
+N62 的 scripts/build-release.mjs 生成 Windows 便携客户端；2026-10-27 将 Node 服务构建拆到独立 scripts/build-server-release.mjs，无需 Electron 即可生成 Ubuntu tar.gz、Windows 服务目录及向后兼容的通用服务目录。deploy/server/ubuntu 与 windows 分别持有系统启动材料，复用同一服务实现。详见 [服务端部署 TDD](../tdd/server-deployment.md)。现有交付包含运行资源、MCP、扩展样例与使用指南；Windows 便携客户端可直接启动而无需开发依赖。交付可执行文件启动及重启验证见 release.test.mjs；实际平台范围见 docs/交付验收.md。
 
 最终交付以实际运行证据为准：Windows 安装启动、重启持久化、双客户端接续、自管服务、独立扩展、真实 MCP 客户端以及数据携带分别验收。架构文件存在、构建通过或开发服务器能运行均不能单独替代这些结果。
 

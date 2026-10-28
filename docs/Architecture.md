@@ -39,7 +39,7 @@ flowchart TD
 | packages/ | 已建立 contracts、core、SQLite adapters 与 ui 状态组件；其他包按队列加入 | [共享包](../.claude/rules/architecture/packages.md) |
 | extensions/ | 用户扩展规范对应的独立样例和打包材料 | [扩展交付](../.claude/rules/architecture/extensions.md) |
 | tests/ | 跨入口、跨设备与故障恢复验收 | [测试与交付](../.claude/rules/architecture/delivery.md) |
-| deploy/ | Windows 构建和自管服务启动材料 | [测试与交付](../.claude/rules/architecture/delivery.md) |
+| deploy/ | Windows 桌面交付及 Ubuntu/Windows 自管服务安装启动材料 | [测试与交付](../.claude/rules/architecture/delivery.md) |
 
 ### 依赖与联动
 

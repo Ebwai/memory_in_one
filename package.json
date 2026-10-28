@@ -21,8 +21,11 @@
     "start:server": "pnpm build && node apps/server/dist/composition/main.js",
     "test:status-ui": "pnpm build:status-demo && node --test tests/e2e/status-demo.test.mjs",
     "test:workspace-ui": "pnpm build:status-demo && node --test --test-concurrency=1 tests/e2e/workspace-setup.test.mjs tests/e2e/workbench.test.mjs tests/e2e/todo-review.test.mjs tests/e2e/todo-progress.test.mjs tests/e2e/todo-tree.test.mjs tests/e2e/conflicts.test.mjs tests/e2e/replication.test.mjs tests/e2e/mcp-management.test.mjs tests/e2e/portability.test.mjs",
-    "check": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm test:electron && pnpm test:status-ui && pnpm test:workspace-ui && pnpm test:mcp && pnpm test:release",
+    "check": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm test:electron && pnpm test:status-ui && pnpm test:workspace-ui && pnpm test:mcp && pnpm test:release && node --test tests/e2e/server-deployment.test.mjs",
     "test:mcp": "pnpm build && node --test tests/e2e/mcp.test.mjs",
+    "build:server": "pnpm build && node scripts/build-server-release.mjs",
+    "test:ubuntu": "pnpm build:server && node scripts/test-ubuntu.mjs",
+    "test:server-deployment": "pnpm build:server && node --test tests/e2e/server-deployment.test.mjs",
     "build:release": "pnpm build:status-demo && node scripts/build-release.mjs",
     "test:release": "pnpm build:release && node --test tests/e2e/release.test.mjs",
     "start:mcp": "node apps/mcp/protocol/main.mjs"

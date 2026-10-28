@@ -41,4 +41,4 @@ authority-commit 与 MCP 写事务在提交事务内核对生命周期，避免�
 tests/integration/migration.test.ts 验证停写、待启用、正常切换、原操作接续、旧位置持续拒写、旧授权无效、本机替代边界和旧快照不复活删除；tests/e2e/portability.test.mjs 验证真实桌面的导出、恢复和切换链。
 
 ## 交付与整合（N61–N62）
-独立扩展的停用、程序缺失、恢复、再导出及补齐在 recovery.test.ts 验证。scripts/build-release.mjs 生成含 Electron 运行时的 Windows 便携目录，以及不依赖 Electron 的 Node 服务目录；程序与持久数据分离，携带扩展样例、MCP 入口和使用指南。release.test.mjs 从交付的可执行文件直接启动、保存并重启验证，不能用开发入口代替此证据。完整检查入口为 package.json 的 check；实际数量及平台范围见 docs/交付验收.md。
+独立扩展的停用、程序缺失、恢复、再导出及补齐在 recovery.test.ts 验证。scripts/build-release.mjs 生成含 Electron 运行时的 Windows 便携目录；独立 scripts/build-server-release.mjs 生成 Ubuntu/Windows Node 服务材料（2026-10-27 接续，见 server-deployment.md）；程序与持久数据分离，携带扩展样例、MCP 入口和使用指南。release.test.mjs 从交付的可执行文件直接启动、保存并重启验证，不能用开发入口代替此证据。完整检查入口为 package.json 的 check；实际数量及平台范围见 docs/交付验收.md。
