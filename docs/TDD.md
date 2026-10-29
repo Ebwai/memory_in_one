@@ -6,6 +6,8 @@ paths:
 
 # TDD 导航
 
+2026-10-29：[SSH 与圆角窗口](../.claude/rules/tdd/ssh-window.md)，承接内置服务器连接和参考图圆角悬浮外观。
+
 2026-10-28 接续：[桌面应用更新](../.claude/rules/tdd/desktop-update.md)，覆盖 N71–N73 的版本发现、下载校验、退出协调及安装回退。
 
 2026-10-27 接续：[Ubuntu 与 Windows 服务端交付](../.claude/rules/tdd/server-deployment.md)，承接既有统一位置初始化与服务端交付，不改变领域业务规则。

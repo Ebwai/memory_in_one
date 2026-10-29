@@ -1,3 +1,4 @@
+import { SshSettings } from "./ssh-settings.js";
 import { AppUpdate } from "./app-update.js";
 import { ExportScopePanel } from "./export-scope.js";
 import { McpManager } from "./mcp-manager.js";
@@ -62,6 +63,7 @@ function App() {
     finally { setBusy(false); }
   }
   return <main>
+    <div className="window-chrome"><span>我的工作空间</span><div><button aria-label="最小化窗口" onClick={() => void window.workspaceSetup.windowAction("minimize")}>−</button><button aria-label="关闭窗口" onClick={() => void window.workspaceSetup.windowAction("request-close") }>×</button></div></div>
     <header className="page-heading"><div><div className="eyebrow">个人信息统一工作空间</div><h1>让信息有一个归处。</h1><p>选择统一位置，保留同一份进度。</p></div></header>
     {binding ? <section className="card" data-testid="workspace-created">
       <h2>{binding.workspace.name}</h2><p>当前工作空间已建立，存放位置如下。</p>
@@ -117,6 +119,7 @@ function App() {
       <button disabled={busy} onClick={() => { setConnecting(false); setVerified(null); setToken(""); }}>取消接入</button>
     </section>}
     {binding && <><SyncStatus /><DomainManager key={binding.workspace.workspaceId} /><McpManager /><ExportScopePanel /></>}
+    <SshSettings />
     <AppUpdate />
     <RecoveryPanel onBinding={setBinding} />
     <MigrationPanel onBinding={setBinding} />

@@ -162,7 +162,7 @@ test("one-click update replaces a real portable app, restarts and preserves exis
   const next = join(parent, "download", "next-app");
   const data = join(parent, "data");
   const archive = join(parent, "new.zip");
-  const nextVersion = "1.2.0";
+  const nextVersion = "1.3.0";
   let app, browser, mainSocket, standalone, server;
   try {
     await cp(resolve(".build/release/workspace-windows-v0.1.0"), root, { recursive: true });

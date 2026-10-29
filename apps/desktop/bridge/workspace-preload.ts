@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { WorkspaceBridge } from "./workspace-contracts.js";
 const api: WorkspaceBridge = {
+  tunnel: (action, config) => ipcRenderer.invoke("workspace:tunnel", action, config),
   update: action => ipcRenderer.invoke("workspace:update", action),
   migration: (action, target) => ipcRenderer.invoke("workspace:migration", action, target),
   recovery: (action, ticket) => ipcRenderer.invoke("workspace:recovery", action, ticket),

@@ -1,3 +1,4 @@
+import { SshTunnel } from "./ssh-tunnel.js";
 import { DesktopUpdater, acknowledgeUpdate } from "./desktop-update.js";
 import { DESKTOP_VERSION } from "../bridge/update-contracts.js";
 import { dirname } from "node:path";
@@ -29,6 +30,7 @@ let busy = false;
 let stopping = false;
 let stopped = false;
 let updater: DesktopUpdater | undefined;
+let tunnel: SshTunnel | undefined;
 
 let connection: { ticket: string; target: PrivateBinding; token: string } | null = null;
 
@@ -109,6 +111,8 @@ async function localServer(directory: string, token: string): Promise<string> {
 app.whenReady().then(async () => {
   base = process.env.WORKSPACE_CLIENT_DIRECTORY ?? join(app.getPath("userData"), "workspace-initialization");
   mkdirSync(base, { recursive: true });
+  tunnel = new SshTunnel(join(base, "ssh"));
+  await tunnel.load();
   try {
     binding = readJson<PrivateBinding>(join(base, "binding.json"));
     pending = readJson<Pending>(join(base, "pending.json"));
@@ -128,12 +132,24 @@ app.whenReady().then(async () => {
   })();
   Menu.setApplicationMenu(null);
   window = new BrowserWindow({ title: "统一工作空间", width: 1000, height: 820,
-    show: process.env.WORKSPACE_SETUP_HIDDEN !== "1", backgroundColor: "#f4f5f7",
+    show: process.env.WORKSPACE_SETUP_HIDDEN !== "1", frame: false, transparent: true, hasShadow: false, backgroundColor: "#00000000",
     webPreferences: { preload: fileURLToPath(new URL("../bridge/workspace-preload.cjs", import.meta.url)),
       nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false,
       offscreen: process.env.WORKSPACE_SETUP_HIDDEN === "1" } });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
+  ipcMain.handle("workspace:tunnel", async (event, action: unknown, config: unknown) => {
+    check(event);
+    if (action === "status") return tunnel!.status();
+    if (action === "save") return tunnel!.save(config as import("./ssh-tunnel.js").TunnelConfig);
+    if (action === "disconnect") return tunnel!.save({ ...tunnel!.status().config, enabled: false });
+    if (action === "key") {
+      const choice = await dialog.showOpenDialog(window, { title: "选择 SSH 私钥", properties: ["openFile"] });
+      if (!choice.canceled && choice.filePaths[0]) await tunnel!.chooseKey(choice.filePaths[0]);
+      return tunnel!.status();
+    }
+    throw new Error("无效连接动作。");
+  });
   ipcMain.handle("workspace:load", async (event): Promise<WorkspaceScreen> => {
     check(event); await startup;
     return { binding: binding ? publicBinding(binding) : null,
@@ -441,6 +457,8 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("workspace:window", (event, action: unknown) => {
     check(event);
+    if (action === "request-close") { window.close(); return; }
+    if (action === "minimize") { window.minimize(); return; }
     if (action === "close") { closeAllowed = true; window.close(); return; }
     if (action === "floating") { window.setAlwaysOnTop(true); window.setSize(440, 650); window.setTitle("待办随手记"); }
     else if (action === "management") { window.setAlwaysOnTop(false); window.setSize(1000, 820); window.setTitle("统一工作空间"); }
@@ -470,6 +488,6 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   if (stopping) return;
   stopping = true;
-  void (async () => { await stopSync?.(); await Promise.all([...servers.values()].map((server) => server.stop())); })().finally(() => { stopped = true; app.quit(); });
+  void (async () => { await stopSync?.(); await tunnel?.stop(); await Promise.all([...servers.values()].map((server) => server.stop())); })().finally(() => { stopped = true; app.quit(); });
 });
 
