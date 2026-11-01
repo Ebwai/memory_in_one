@@ -6,8 +6,8 @@ export function ExportScopePanel() {
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirmed, setConfirmed] = useState(false);
   async function preview() {
     setBusy(true); setScope(null); setConfirmed(false); setError("");
-    try { setScope(await window.workspaceSetup.exportScope(source)); }
-    catch { setError(source === "authority" ? "无法完整读取统一位置范围，来源未切换。可以恢复连接后重试，或主动选择本机来源。" : "本机范围读取失败，未把不可读数据当成空领域。"); }
+    try { if (source === "authority") { const status = await window.workspaceSetup.sync("now"); if (status.phase !== "synced" || status.pending || status.uncertain || status.conflicts) throw new Error("同步尚未完成或存在待处理冲突，请处理后重试导出。"); } setScope(await window.workspaceSetup.exportScope(source)); }
+    catch (error) { if (error instanceof Error && error.message.startsWith("同步")) { setError(error.message); return; } setError(source === "authority" ? "无法完整读取统一位置范围，来源未切换。可以恢复连接后重试，或主动选择本机来源。" : "本机范围读取失败，未把不可读数据当成空领域。"); }
     finally { setBusy(false); }
   }
   return <section className="card" data-testid="export-scope"><h2>工作空间数据导出</h2><p>先确认来源和范围。确认后可将该来源的完整快照保存为本地文件。</p>
@@ -18,7 +18,7 @@ export function ExportScopePanel() {
         <p>待同步：{scope.pending} · 结果待核对：{scope.uncertain} · 冲突：{scope.conflicts} · 已保存冲突整理材料：{scope.savedEditing} · 调用记录：{scope.calls}</p>
         <h4>该来源持有的全部领域</h4>{scope.domains.map(d => <p key={d.domainId}>{String((d.registration?.definition as JsonObject)?.name ?? "未识别领域")} · {d.domainId} · {d.registration?.enabled ? "已启用" : "停用或无登记"} · 内容 {d.records} · 删除接续 {d.deletions}</p>)}
         <h4>范围包含</h4><ul>{scope.includes.map(t => <li key={t}>{t}</li>)}</ul><h4>范围说明</h4><ul>{scope.limitations.map(t => <li key={t}>{t}</li>)}</ul>
-        <button disabled={confirmed} onClick={() => setConfirmed(true)}>确认按此来源范围继续</button>{confirmed && <><p role="status">范围已确认。保存时生成新的完整快照，后续改动不混入本次文件。</p><button disabled={busy} onClick={() => { setBusy(true); setError(""); void window.workspaceSetup.exportFile(source).then(r => setError(r.cancelled ? "已取消导出，原数据保持不变。" : "导出完成：" + r.path + " · 快照时间：" + r.capturedAt)).catch(() => setError("导出未完成，原数据及原有有效文件保持不变，请检查位置、空间及来源连接后重试。")).finally(() => setBusy(false)); }}>生成快照并保存文件</button></>}
+        <button disabled={confirmed} onClick={() => setConfirmed(true)}>确认按此来源范围继续</button>{confirmed && <><p role="status">范围已确认。保存时生成新的完整快照，后续改动不混入本次文件。</p><button disabled={busy} onClick={() => { setBusy(true); setError(""); void (async () => { if (source === "authority") { const status = await window.workspaceSetup.sync("now"); if (status.phase !== "synced" || status.pending || status.uncertain || status.conflicts) throw new Error("同步未完成"); } return window.workspaceSetup.exportFile(source); })().then(r => setError(r.cancelled ? "已取消导出，原数据保持不变。" : "导出完成：" + r.path + " · 快照时间：" + r.capturedAt)).catch(() => setError("导出未完成，原数据及原有有效文件保持不变，请检查位置、空间及来源连接后重试。")).finally(() => setBusy(false)); }}>生成快照并保存文件</button></>}
       </div>}</>}
   </section>;
 }

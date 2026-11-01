@@ -1,3 +1,4 @@
+import { NOTES_DOMAIN, isProjectDomain, isPresetDomain, presetDefinition, matchesPreset, validatePresetRecord } from "@workspace/contracts";
 import { createHash } from "node:crypto";
 import { CollectionContentService } from "@workspace/core";
 import { canonical } from "@workspace/contracts";
@@ -31,7 +32,37 @@ export function installDomainFeatures(check: (event: IpcMainInvokeEvent) => void
       if (!request || typeof request.action !== "string") throw new Error("无效的领域请求。");
       writeAttempt = ["todo-progress", "todo-create", "todo-recover", "save-record", "delete-record", "enable", "disable", "register", "conflict-choice"].includes(request.action);
       store = await SqliteLocalStore.open({ databasePath: binding.replicaPath });
-      const registry = new DomainRegistry(binding.workspace.workspaceId, store, new FileExtensionPrograms(join(base(), "programs", binding.workspace.workspaceId)), (definition) => definition.domainId !== TODO_DOMAIN);
+      const registry = new DomainRegistry(binding.workspace.workspaceId, store, new FileExtensionPrograms(join(base(), "programs", binding.workspace.workspaceId)), (definition) => definition.domainId !== TODO_DOMAIN && !isPresetDomain(definition.domainId));
+      const builtin = (await registry.list()).find(entry => entry.definition.domainId === TODO_DOMAIN);
+      if (builtin && builtin.definition.version !== todoDefinition.version) {
+        await registry.register(todoDefinition, "builtin-todo-upgrade-" + todoDefinition.version);
+        writeAttempt = true;
+      }
+      // Shipped templates can be restored on another device without executing user code.
+      let entries = await registry.list();
+      if (!entries.some(e => e.definition.domainId === NOTES_DOMAIN)) {
+        await registry.register(presetDefinition(NOTES_DOMAIN), "preset-notes-register");
+        await registry.setEnabled(NOTES_DOMAIN, true, "preset-notes-enable");
+        writeAttempt = true;
+        entries = await registry.list();
+      }
+      for (const entry of entries) if (matchesPreset(entry.definition) && !entry.programAvailable) {
+        await registry.register(entry.definition, "preset-restore-" + entry.definition.domainId);
+      }
+      if (["create-project", "rename-project", "delete-project"].includes(request.action)) {
+        writeAttempt = true;
+        if (typeof request.domainId !== "string" || !isProjectDomain(request.domainId) || typeof request.operationId !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(request.operationId)) throw new Error("项目或操作身份无效。");
+        if (request.action === "create-project") {
+          if (typeof request.text !== "string" || !request.text.trim() || request.text.trim().length > 100) throw new Error("请填写 1 至 100 个字符的项目名称。");
+          await registry.register(presetDefinition(request.domainId), request.operationId + "-register");
+          await registry.manageProject(request.domainId, request.operationId + "-name", request.text);
+          await registry.setEnabled(request.domainId, true, request.operationId + "-enable");
+        } else {
+          if (request.action === "rename-project" && typeof request.text !== "string") throw new Error("请填写项目名称。");
+          await registry.manageProject(request.domainId, request.operationId, request.action === "delete-project" ? null : request.text!);
+        }
+        return { ok: true, domains: await registry.list(), message: "已保存在本机，待同步。" };
+      }
       if (request.action === "preview") {
         if (typeof request.source !== "string") throw new Error("请提供扩展 JSON。");
         return { ok: true, preview: parseExtension(request.source) };
@@ -143,6 +174,7 @@ export function installDomainFeatures(check: (event: IpcMainInvokeEvent) => void
           if (editor && editor.baseSequence !== existing?.localSequence) throw new Error("编辑依据已变化，原输入保留，请核对最新进度。");
           if (!domain.definition.actions.includes(existing ? "update" : "create")) throw new Error("扩展未声明此内容动作。");
           validateExtensionRecord(domain.definition, request.payload);
+          if (isPresetDomain(request.domainId)) validatePresetRecord(request.domainId, request.payload);
           const content = await registry.contentStore(request.domainId);
           const save = await new LocalContentService({ ...content, commit: (change) => content.commit(change, existing?.localSequence ?? null) })
             .save({ workspaceId: binding.workspace.workspaceId, domainId: request.domainId, recordId: request.recordId, operationId: request.operationId, kind: "put", payload: request.payload });

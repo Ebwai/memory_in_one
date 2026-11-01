@@ -1,3 +1,4 @@
+import { isPresetDomain, isProjectDomain, matchesPreset, validatePresetRecord } from "@workspace/contracts";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { SqliteLocalStore, SqliteWorkspaceAuthority } from "@workspace/adapters";
@@ -7,30 +8,40 @@ import { todoConflictPolicy, todoDefinition, TODO_DOMAIN, validateTodoConflict, 
 import { canonical } from "@workspace/contracts";
 import type { ContentValue, DomainHandler, DomainRegistration, JsonObject, UploadRequest } from "@workspace/contracts";
 
+import { isCompatibleDomainUpgrade } from "@workspace/contracts";
 export class WorkspaceSync {
   constructor(private readonly directory: string) {}
   async handler(store: SqliteLocalStore, workspaceId: string, domainId: string): Promise<DomainHandler> {
     if (domainId === DOMAIN_REGISTRY) {
       const validate = (value: ContentValue, base: ContentValue) => {
         if (!value || typeof value.enabled !== "boolean" || typeof value.fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(value.fingerprint) ||
-            Object.keys(value).some((key) => !["definition", "fingerprint", "enabled"].includes(key))) throw new Error("领域登记格式无效。");
+            Object.keys(value).some((key) => !["definition", "fingerprint", "enabled", "displayName", "removed"].includes(key))) throw new Error("领域登记格式无效。");
+        const id = (value.definition as JsonObject)?.domainId;
+        if ((value.displayName !== undefined || value.removed !== undefined) && (typeof id !== "string" || !isProjectDomain(id))) throw new Error("仅项目实例支持名称和整体删除。");
+        if (value.displayName !== undefined && (typeof value.displayName !== "string" || !value.displayName.trim() || value.displayName.length > 100)) throw new Error("项目名称无效。");
+        if (value.removed !== undefined && typeof value.removed !== "boolean" || value.removed === true && value.enabled !== false || base?.removed === true) throw new Error("已删除项目不能恢复或继续变更。");
+        if (typeof id === "string" && isPresetDomain(id) && !matchesPreset(value.definition as unknown as import("@workspace/contracts").ExtensionDefinition)) throw new Error("预设模板声明不匹配。");
         if (value.fingerprint !== createHash("sha256").update(JSON.stringify(value.definition)).digest("hex")) throw new Error("领域程序指纹与声明不一致。");
         if ((value.definition as JsonObject)?.domainId === TODO_DOMAIN) {
-          if (canonical(value.definition) !== canonical(todoDefinition)) throw new Error("待办程序声明不兼容。");
+          if (canonical(value.definition) !== canonical(todoDefinition) && !isCompatibleDomainUpgrade(value.definition as unknown as import("@workspace/contracts").ExtensionDefinition, todoDefinition)) throw new Error("待办程序声明不兼容。");
         } else parseExtension(JSON.stringify(value.definition));
-        if (base && (canonical(value.definition) !== canonical(base.definition) || value.fingerprint !== base.fingerprint)) throw new Error("不能通过同步覆盖已有领域程序或版本。");
+        if (base && (canonical(value.definition) !== canonical(base.definition) || value.fingerprint !== base.fingerprint) && !isCompatibleDomainUpgrade(base.definition as unknown as import("@workspace/contracts").ExtensionDefinition, value.definition as unknown as import("@workspace/contracts").ExtensionDefinition)) throw new Error("不能通过同步覆盖已有领域程序或版本。");
       };
-      return { validate, guards: [], policy: { attributes: { enabled: ["enabled"] }, validate } };
+      return { validate, guards: [], policy: { attributes: { enabled: ["enabled", "removed"], name: ["displayName"], program: ["definition", "fingerprint"] }, validate } };
     }
     const registration = await store.authorityRead({ workspaceId, domainId: DOMAIN_REGISTRY, recordId: domainId });
     const value = registration?.value as unknown as DomainRegistration | null;
-    if (!registration || !value?.enabled || value.definition.domainId !== domainId) throw new Error("统一位置的领域未登记或已停用，本机成果保留。");
+    if (!registration || value?.removed || !value?.enabled || value.definition.domainId !== domainId) throw new Error("统一位置的领域未登记或已停用，本机成果保留。");
     if (domainId === TODO_DOMAIN) return { policy: todoConflictPolicy, guards: [registration], validate: validateTodoConflict, validateCollection: validateTodoTree };
-    if (!await store.mcp<boolean>({ method: "host-get", workspaceId, domainId })) throw new Error("服务器缺少该领域兼容程序，原数据保留。");
+    if (isPresetDomain(domainId) && !matchesPreset(value.definition)) throw new Error("预设模板声明不匹配。");
+    if (!isPresetDomain(domainId) && !await store.mcp<boolean>({ method: "host-get", workspaceId, domainId })) throw new Error("服务器缺少该领域兼容程序，原数据保留。");
     const definition = parseExtension(JSON.stringify(value.definition));
     return { guards: [registration], validate: (payload, base, creating) => {
       if (!definition.actions.includes(payload === null ? "delete" : creating ? "create" : "update")) throw new Error("领域未声明此动作。");
-      if (payload !== null) validateExtensionRecord(definition, payload);
+      if (payload !== null) {
+        validateExtensionRecord(definition, payload);
+        if (isPresetDomain(domainId)) validatePresetRecord(domainId, payload);
+      }
       if (base === null && !creating && payload !== null) throw new Error("自定义领域不支持此恢复结果。");
     } };
   }

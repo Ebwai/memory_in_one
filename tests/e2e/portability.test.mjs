@@ -57,7 +57,7 @@ test("N51–N62 real desktop exports, restores and switches authority while keep
     await page.getByRole("button", { name: "添加待办", exact: true }).click();
     await page.getByTestId("captured-todo").getByText("迁移保留的内容", { exact: true }).waitFor();
     await page.getByRole("button", { name: "立即同步", exact: true }).click();
-    await page.getByTestId("workspace-sync-status").getByText(/当前已保存改动已获统一位置确认/).waitFor();
+    await page.waitForFunction(async () => (await window.workspaceSetup.sync("status")).phase === "synced");
     await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
     const originalIdentity = await page.getByTestId("workspace-id").textContent();
     const migration = page.getByTestId("workspace-migration");
@@ -87,7 +87,7 @@ test("N51–N62 real desktop exports, restores and switches authority while keep
     await page.getByLabel("任务内容", { exact: true }).fill("迁移后继续记录");
     await page.getByRole("button", { name: "添加待办", exact: true }).click();
     await page.getByRole("button", { name: "立即同步", exact: true }).click();
-    await page.getByTestId("workspace-sync-status").getByText(/当前已保存改动已获统一位置确认/).waitFor();
+    await page.waitForFunction(async () => (await window.workspaceSetup.sync("status")).phase === "synced");
     await page.screenshot({ path: ".build/portability.png", fullPage: true });
   } finally { await app.close(); await rm(directory, { recursive: true, force: true }); }
 });

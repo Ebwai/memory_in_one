@@ -9,7 +9,7 @@ import { TodoDetails } from "./todo-details.js";
 import { useLocalDay } from "./use-local-day.js";
 import type { DomainViewHandle } from "./domain-view.js";
 
-export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void }>(function TodoCapture({ onManagement }, ref) {
+export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void; compact?: boolean; onToggleMode?(): void }>(function TodoCapture({ onManagement, compact, onToggleMode }, ref) {
   const [text, setText] = useState("");
   const [records, setRecords] = useState<readonly LocalRecord[]>([]);
   const [message, setMessage] = useState("");
@@ -18,7 +18,12 @@ export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void }
   const [pinned, setPinned] = useState(true);
   const today = useLocalDay();
   const [selected, setSelected] = useState<LocalRecord | null>(null);
+  const [deleteRequested, setDeleteRequested] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [unfinishedExpanded, setUnfinishedExpanded] = useState(true);
+  useEffect(() => { setExpanded(false); setUnfinishedExpanded(true); }, [compact]);
+  useEffect(() => { const typing = (event: KeyboardEvent) => { if (!compact || selected || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return; const target = event.target as HTMLElement; if (target?.closest("input,textarea,select,[contenteditable=true]")) return; if (event.key.length === 1 || event.key === "Process") input.current?.focus(); }; window.addEventListener("keydown", typing, true); return () => window.removeEventListener("keydown", typing, true); });
+  const [filter, setFilter] = useState<"all" | "unfinished" | "completed">("all");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [listError, setListError] = useState("");
   const reading = useRef(false);
@@ -138,27 +143,32 @@ export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void }
       {display.childCount>0 && <button className="todo-tree-toggle" aria-label={(collapsed.has(display.recordId)?"展开":"折叠")+"子待办："+display.text}
         aria-expanded={!collapsed.has(display.recordId)} onClick={()=>setCollapsed(previous=>{const next=new Set(previous);if(next.has(display.recordId))next.delete(display.recordId);else next.add(display.recordId);return next;})}>{collapsed.has(display.recordId)?"▸":"▾"}</button>}
       <input type="checkbox" aria-label={display.status === "completed" ? "已完成任务" : display.status === "unknown" ? "任务状态待核对" : "未完成任务"} checked={display.status === "completed"} title={!display.canComplete && display.status !== "completed" ? "请先完成所有子待办" : undefined} disabled={conflictedIds.includes(display.recordId) || display.status === "unknown" || progress.locked(display.recordId) || (display.status !== "completed" && !display.canComplete)} onChange={() => { const record = records.find((item) => item.recordId === display.recordId); if (record) void progress.mutate(record, { kind: "complete", completed: display.status !== "completed" }); }} />
-      <div><button className="todo-open" disabled={conflictedIds.includes(display.recordId)} onClick={(event) => { const found = records.find((record) => record.recordId === display.recordId); if (found) { origin.current = event.currentTarget; setSelected(found); } }}>{display.text}</button>
+      <div><button className="todo-open" disabled={conflictedIds.includes(display.recordId)} onClick={(event) => { const found = records.find((record) => record.recordId === display.recordId); if (found) { origin.current = event.currentTarget; setDeleteRequested(false); setSelected(found); } }}>{display.text}</button>
+        {display.repeatFrequency && <div role="progressbar" aria-label="本周期完成进度" aria-valuemin={0} aria-valuemax={display.repeatTarget} aria-valuenow={display.repeatCount} title={display.repeatCount + "/" + display.repeatTarget} style={{display:"flex",gap:2,height:4,marginTop:5,width:"100%",minWidth:100}}>{Array.from({length:display.repeatTarget},(_,index)=><span key={index} style={{flex:1,minWidth:0,background:index<display.repeatCount?"#111111":"#e5e5e5",borderRadius:1}} />)}</div>}
+        {display.repeatFrequency && <small>{display.repeatCount}/{display.repeatTarget}</small>}
         {display.dateLabel && <span className={display.dateLabel.startsWith("已逾期") ? "todo-date overdue" : "todo-date"}>{display.dateLabel}</span>}
         {display.warning && <p role="alert">{display.warning}</p>}
         {progress.locked(display.recordId) && <p role="status">{progress.states.get(display.recordId)?.message}</p>}
         {progress.states.get(display.recordId)?.phase === "uncertain" && <button onClick={() => void progress.retry(display.recordId)}>核对原任务操作</button>}
         {progress.states.get(display.recordId)?.phase === "failed" && <p role="alert">{progress.states.get(display.recordId)?.message}</p>}</div>
+      <button className="todo-row-delete" aria-label={"删除待办：" + display.text} disabled={progress.locked(display.recordId) || conflictedIds.includes(display.recordId)} onClick={() => { const found = records.find(r => r.recordId === display.recordId); if (found) { setDeleteRequested(true); setSelected(found); } }}>×</button>
     </li>;
   }
   return <section className="todo-capture" data-testid="todo-capture">
-    <div inert={!!selected}>
-    <header className="capture-toolbar"><strong>待办随手记</strong><button onClick={() => void window.workspaceSetup.windowAction(pinned ? "unpin" : "pin").then(() => setPinned(!pinned))}>{pinned ? "取消置顶" : "窗口置顶"}</button><button onClick={onManagement}>工作空间管理</button></header>
-    <label htmlFor="todo-text">任务内容</label><textarea id="todo-text" ref={input} value={text} rows={3} readOnly={busy || uncertain} aria-busy={busy}
+    <div className="todo-content" inert={!!selected}>
+    <div className="capture-masthead"><span className="pixel-index" aria-hidden="true"><svg viewBox="0 0 100 86"><path d="M8 0H42V8H50V78H42V86H8V78H0V8H8ZM12 14V72H38V14ZM68 0H88V72H100V86H58V72H72V18H60V8H68Z" fill="currentColor" fillRule="evenodd"/></svg></span><div><h1>待办事项</h1><p>专注当下，完成真正重要的事。</p></div></div>
+    <header className="capture-toolbar"><strong>快速记录</strong><button onClick={onToggleMode}>{compact ? "展开工作台" : "悬浮窗口"}</button><button onClick={() => void window.workspaceSetup.windowAction(pinned ? "unpin" : "pin").then(() => setPinned(!pinned))}>{pinned ? "取消置顶" : "窗口置顶"}</button><button onClick={onManagement}>工作空间管理</button></header>
+    <div className="quick-entry"><label htmlFor="todo-text">任务内容</label><textarea id="todo-text" ref={input} value={text} rows={3} readOnly={busy || uncertain} aria-busy={busy}
       placeholder="只需写下要做的事…" onChange={(e) => { setText(e.target.value); attempt.current = null; setMessage(""); }}
       onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !composing.current && e.keyCode !== 229) { e.preventDefault(); void save(); } }} />
-    <button className="primary" disabled={busy} onClick={() => void save()}>{busy ? "正在保存…" : uncertain ? "核对并重试原提交" : "添加待办"}</button>
-    <p role="status" data-testid="todo-save-status">{message || "仅本机保存确认后清空文字；接续情况见同步状态。"}</p>
+    <button className="primary" aria-label={busy ? "正在保存…" : uncertain ? "核对并重试原提交" : "添加待办"} disabled={busy} onClick={() => void save()}>{busy ? "正在保存…" : uncertain ? "核对并重试原提交" : "添加待办"}</button>
+    </div><p role="status" data-testid="todo-save-status">{message || "仅本机保存确认后清空文字；接续情况见同步状态。"}</p>
     <p className="scope-note">Enter 添加 · Shift+Enter 换行 · 中文选词不提交</p>
     <ConflictPanel ref={conflicts} onPending={setConflictedIds} />
     <section className="todo-review" aria-label="待办列表">
-      <div className="review-heading"><h2>未完成</h2><button disabled={busy || loadState === "loading"} onClick={() => void load()}>重新读取列表</button></div>
+      <nav className="task-tabs" aria-label="待办筛选"><button aria-pressed={filter === "all"} onClick={() => setFilter("all")}>全部 <span>{groups.unfinished.length + groups.completed.length}</span></button><button aria-pressed={filter === "unfinished"} onClick={() => setFilter("unfinished")}>进行中 <span>{groups.unfinished.length}</span></button><button aria-pressed={filter === "completed"} onClick={() => setFilter("completed")}>已完成 <span>{groups.completed.length}</span></button><small>⠿　按手动排序</small></nav>
+      <div className="review-heading"><h2><button aria-label={"未完成 " + (unfinishedExpanded ? "▾" : "▸")} aria-expanded={unfinishedExpanded} onClick={() => setUnfinishedExpanded(v => !v)}><span className="folder-arrow" aria-hidden="true">{unfinishedExpanded ? "▾" : "▸"}</span>未完成 <span className="folder-count">（{groups.unfinished.length}）</span></button></h2><button disabled={busy || loadState === "loading"} onClick={() => void load()}>重新读取列表</button></div>
       <p className="scope-note">本机任务 · 接续情况见同步状态</p>
       <p role="status" data-testid="todo-list-loading" style={{minHeight:18}}>{loadState === "loading" ? "正在读取待办…" : ""}</p>
       <p role="status" data-testid="todo-progress-notice" style={{minHeight:18}}>{progress.notice}</p>
@@ -170,13 +180,14 @@ export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void }
         onDrop={event=>{event.preventDefault();moveTo(null,"after");}}>移到顶层（包含全部子待办）</div>
         <p role="status">{dropHint ? dropHint.id===null ? "释放后移到顶层" : dropHint.position==="inside" ? "释放后成为该事项的子待办" : "释放后调整同级顺序" : "拖向事项或列表间隙"}</p></>
       <div className="todo-review-list" data-testid="todo-review-scroll">
-        <ul className="capture-records" data-testid="unfinished-todos">{visible(groups.unfinished).map(row)}</ul>
+        <ul className="capture-records" data-testid="unfinished-todos" hidden={filter === "completed" || !unfinishedExpanded}>{visible(groups.unfinished).map(row)}</ul>
         {loadState === "ready" && !groups.unfinished.length && <p>暂无未完成任务</p>}
-        <button className="completed-toggle" title="数量按顶层目标计算；展开可查看全部子待办" aria-expanded={expanded} aria-controls="completed-todo-list" onClick={() => setExpanded(!expanded)}>已完成（{groups.completedRoots}）</button>
-        <ul id="completed-todo-list" className="capture-records" data-testid="completed-todos" hidden={!expanded}>{visible(groups.completed).map(row)}</ul>
+        <div className="completed-heading"><button className="completed-toggle" aria-label={"已完成（" + groups.completedRoots + "）"} title="数量按顶层目标计算；展开可查看全部子待办" aria-expanded={expanded} aria-controls="completed-todo-list" onClick={() => setExpanded(!expanded)}><span className="folder-arrow" aria-hidden="true">{expanded ? "▾" : "▸"}</span>已完成<span className="folder-count">（{groups.completedRoots}）</span></button></div>
+        <ul id="completed-todo-list" className="capture-records" data-testid="completed-todos" hidden={filter === "unfinished" || (!expanded && filter !== "completed")}>{visible(groups.completed).map(row)}</ul>
       </div>
     </section>
     </div>
-    {selected && <TodoDetails records={records} canComplete={[...groups.unfinished,...groups.completed].find(n=>n.recordId===selected.recordId)?.canComplete ?? false} conflicted={conflictedIds.includes(selected.recordId)} ref={details} progress={progress} key={selected.recordId} snapshot={selected} today={today} onClose={closeDetails} onMissing={(recordId) => setRecords((current) => current.filter((record) => record.recordId !== recordId))} />}
+    {!compact && !selected && <aside className="detail-placeholder"><div className="editorial-date">{new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", weekday: "short" }).format(new Date())}<span className="pixel-decoration" aria-hidden="true">✣</span></div><p className="editorial-motto">把想做的事<br/>变成正在发生的事。</p><div className="empty-detail"><span>↖</span><h2>每一件事，都有着落。</h2><p>选择一条待办，查看备注、<br/>截止日期与重复规则。</p></div></aside>}
+    {selected && <TodoDetails initialDelete={deleteRequested} records={records} canComplete={[...groups.unfinished,...groups.completed].find(n=>n.recordId===selected.recordId)?.canComplete ?? false} conflicted={conflictedIds.includes(selected.recordId)} ref={details} progress={progress} key={selected.recordId} snapshot={selected} today={today} onClose={closeDetails} onMissing={(recordId) => setRecords((current) => current.filter((record) => record.recordId !== recordId))} />}
   </section>;
 });

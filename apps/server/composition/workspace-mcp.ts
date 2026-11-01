@@ -1,4 +1,5 @@
-import { prepareTodo, prepareTodoMutation, prepareTodoTree, todoSubtreeBasis, TODO_DOMAIN } from "@workspace/todo-list";
+import { isPresetDomain } from "@workspace/contracts";
+import { currentTodoRows, prepareTodo, prepareTodoMutation, prepareTodoTree, todoSubtreeBasis, TODO_DOMAIN } from "@workspace/todo-list";
 import { parseExtension, validateExtensionRecord } from "@workspace/extension-sdk";
 import { canonical, type McpPrepared, type ContentValue, type DomainRegistration, type UploadRequest } from "@workspace/contracts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -40,7 +41,7 @@ export class WorkspaceMcp {
           return { grant, credential, workspace: identity };
         }
         if (method === "grant-revoke") return await access.revoke(String(input.id ?? ""));
-        if (method === "directory") return await store.authorityList(identity.workspaceId, DOMAIN_REGISTRY);
+        if (method === "directory") return (await store.authorityList(identity.workspaceId, DOMAIN_REGISTRY)).filter(r => !r.value?.removed);
         throw new Error("所有者管理动作不可用。");
       }
       const grant: McpGrant = await access.authenticate(createHash("sha256").update(secret).digest("hex"));
@@ -51,13 +52,13 @@ export class WorkspaceMcp {
       if (method === "directory") {
         if (!grant.actions.includes("directory")) throw new Error("未授予领域管理查询。");
         const records = await store.authorityList(identity.workspaceId, DOMAIN_REGISTRY);
-        return await Promise.all(records.filter(r => grant.domains.includes(r.recordId)).map(async r => ({ ...r, programAvailable: r.recordId === TODO_DOMAIN || await store.mcp<boolean>({ method: "host-get", workspaceId: identity.workspaceId, domainId: r.recordId }), programTarget: "server" })));
+        return await Promise.all(records.filter(r => !r.value?.removed && grant.domains.includes(r.recordId)).map(async r => ({ ...r, programAvailable: r.recordId === TODO_DOMAIN || isPresetDomain(r.recordId) || await store.mcp<boolean>({ method: "host-get", workspaceId: identity.workspaceId, domainId: r.recordId }), programTarget: "server" })));
       }
       if (method === "program") {
         const domainId = String(input.domainId), action = String(input.action);
         access.require(grant, domainId, action);
         if (!["install", "remove"].includes(action) || input.target !== "server") return { status: "unavailable", message: "此通道仅管理服务器程序，不能操作其他客户端。", target: "server" };
-        if (domainId === TODO_DOMAIN) throw new Error("内置程序不能单独安装或移除。");
+        if (domainId === TODO_DOMAIN || isPresetDomain(domainId)) throw new Error("内置程序不能单独安装或移除。");
         if (typeof input.operationId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(input.operationId)) throw new Error("缺少原调用身份。");
         const registration = await store.authorityRead({ workspaceId: identity.workspaceId, domainId: DOMAIN_REGISTRY, recordId: domainId });
         if (!registration?.value) throw new Error("领域未登记。");
@@ -84,10 +85,10 @@ export class WorkspaceMcp {
               value = prepareDomainRegistration(old, definition, createHash("sha256").update(JSON.stringify(definition)).digest("hex"));
             } else {
               if (!old || Number(raw.revision) !== current?.revision) throw new Error("领域进度已变化，请重新查询。");
-              value = prepareDomainEnabled(old, action === "enable", await store.mcp<boolean>({ method: "host-get", workspaceId: identity.workspaceId, domainId }));
+              value = prepareDomainEnabled(old, action === "enable", isPresetDomain(domainId) || await store.mcp<boolean>({ method: "host-get", workspaceId: identity.workspaceId, domainId }));
             }
             return { ...scope, authorityId: identity.authorityId, operationId: audit.operationId, baseRevision: current?.revision ?? 0,
-              value: value as unknown as JsonObject, changed: ["enabled"], resolution: false, audit: { ...audit, recordId: domainId, summary: action + " · " + domainId + "（工作空间）" } };
+              value: value as unknown as JsonObject, changed: action === "register" ? ["program", "enabled"] : ["enabled"], resolution: false, audit: { ...audit, recordId: domainId, summary: action + " · " + domainId + "（工作空间）" } };
           }
           const recordId = action === "create" ? randomUUID() : String(raw.recordId ?? "");
           const current = action === "create" ? null : await store.authorityRead({ workspaceId: identity.workspaceId, domainId, recordId });
@@ -101,11 +102,11 @@ export class WorkspaceMcp {
           if (domainId === TODO_DOMAIN) {
             if (action === "create") value = prepareTodo(raw.text, audit.time);
             else {
-              const command = action === "update" ? { kind: "text", text: raw.text } : action === "date" ? { kind: "date", dueDate: raw.dueDate } :
+              const command = action === "update" ? (raw.notes !== undefined ? { kind: "notes", notes: raw.notes } : raw.frequency !== undefined ? { kind: "repeat", frequency: raw.frequency, target: raw.target, timezone: raw.timezone } : { kind: "text", text: raw.text }) : action === "date" ? { kind: "date", dueDate: raw.dueDate } :
                 action === "complete" || action === "restore" ? { kind: "complete", completed: action === "complete" } : action === "delete" ? { kind: "delete", confirmed: true } : null;
               if (!command) throw new Error("待办未提供此动作。");
-              if (action==="update" || action==="date") {
-                const mutation = prepareTodoMutation(base!.value!,command,audit.time);
+              if ((action==="update" || action==="date") && !base!.value!.repeatFrequency && command.kind !== "repeat") {
+                const mutation = prepareTodoMutation(base!.value!,command as import("@workspace/todo-list").TodoCommand,audit.time);
                 value = mutation.kind==="delete" ? null : mutation.payload;
               } else {
               const versions = await store.authorityList(identity.workspaceId,domainId);
@@ -136,7 +137,14 @@ export class WorkspaceMcp {
         if (!prepared || prepared.request.audit?.sourceId !== grant.id || typeof input.accepted !== "boolean") throw new Error("确认对象或来源无效。");
         return await store.mcp({ method: "confirm", workspaceId: identity.workspaceId, operationId: String(input.operationId), challenge: String(input.challenge), accepted: input.accepted });
       }
-      if (method === "list" || method === "get") return await new McpQueries(identity.workspaceId, access, store, available).read(grant, String(input.domainId ?? ""), method === "get" ? String(input.recordId ?? "") : undefined);
+      if (method === "list" || method === "get") {
+        const result = await new McpQueries(identity.workspaceId, access, store, available).read(grant, String(input.domainId ?? ""), method === "get" ? String(input.recordId ?? "") : undefined);
+        if (input.domainId !== TODO_DOMAIN) return result;
+        const versions = await store.authorityList(identity.workspaceId, TODO_DOMAIN);
+        const effective = currentTodoRows(versions.map(v=>({workspaceId:v.workspaceId,domainId:v.domainId,recordId:v.recordId,localSequence:v.revision,deleted:v.value===null,payload:v.value})),new Date().toISOString());
+        const project = (version: import("@workspace/contracts").AuthorityVersion) => ({...version, effectiveValue: effective.find(r=>r.recordId===version.recordId)?.payload ?? null});
+        return {...result, ...(result.record ? {record:project(result.record)} : {}), ...(result.records ? {records:result.records.map(project)} : {})};
+      }
       if (method === "status") {
         const call = await store.mcp<import("@workspace/contracts").McpCall | null>({ method: "call-read", workspaceId: identity.workspaceId, operationId: String(input.operationId ?? "").startsWith(grant.id + ":") ? String(input.operationId) : grant.id + ":" + String(input.operationId ?? "") });
         if (call && call.sourceId !== grant.id) throw new Error("不能读取其他来源调用。");

@@ -3,6 +3,7 @@ import type { RecoverySummary } from "@workspace/adapters";
 import type { WorkspaceBinding } from "../bridge/workspace-contracts.js";
 
 export function RecoveryPanel({ onBinding }: { onBinding: (binding: WorkspaceBinding) => void }) {
+  const [device, setDevice] = useState("local");
   const [summary, setSummary] = useState<RecoverySummary | null>(null);
   const [ticket, setTicket] = useState(""), [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false), [done, setDone] = useState(false);
@@ -19,7 +20,8 @@ export function RecoveryPanel({ onBinding }: { onBinding: (binding: WorkspaceBin
     finally { setBusy(false); }
   }
   return <section className="card" data-testid="workspace-recovery"><h2>恢复工作空间数据</h2><p>选择导出文件和空白目录。预览不会写入或改变当前绑定。</p>
-    <button disabled={busy} onClick={() => void preview()}>选择材料与恢复目标</button>
+    <label>恢复到设备<select aria-label="恢复到设备" value={device} disabled={busy} onChange={e => setDevice(e.target.value)}><option value="local">本机电脑</option><option value="server">服务器（待实现）</option></select></label>{device === "server" && <p role="status">服务器直接恢复暂未实现。当前可将完整备份上传服务器，沿现有服务器恢复流程使用。</p>}
+    <button disabled={busy || device !== "local"} onClick={() => void preview()}>选择材料与恢复目标</button>
     {summary && <div data-testid="recovery-preview"><h3>{summary.workspace.name}</h3><p>工作空间身份：{summary.workspace.workspaceId}</p><p>权威身份：{summary.workspace.authorityId}</p>
       <p>来源：{summary.source === "local" ? "本机可恢复进度（不代表其他设备最新全量）" : "统一位置（不含其他设备尚未上传改动）"}</p><p>原位置仅作说明：{summary.location}</p><p>快照时间：{summary.capturedAt}</p><p>恢复目标：{summary.target}</p>
       <p>待同步：{summary.pending} · 结果待核对：{summary.uncertain} · 冲突：{summary.conflicts}</p>

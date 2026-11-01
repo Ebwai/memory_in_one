@@ -19,7 +19,7 @@ PRD：应用连接与悬浮外观。host/ssh-tunnel.ts 拥有配置、私钥副�
 
 ## 窗口与异常
 
-透明无框窗口内预留阴影边距，28px 圆角表面，拖动区与按钮 no-drag 分离。关闭按钮经 request-close 回到原有领域草稿门禁。最小化和置顶由宿主执行。
+2026-11-01 C 图视觉更新：透明无框窗口采用黑白方形表面及阶梯切角，拖动区与按钮 no-drag 分离。DomainManager 的 compact 状态控制宿主 floating/management 动作，初始为完整工作台，本机 localStorage 记住窗口模式；切换时不卸载 TodoCapture，不丢失未提交内容。宿主管理模式使用 1280×820，悬浮模式沿用 440×650。TodoCapture 在宽窗口以右侧详情栏复用 TodoDetails，窄窗口仍用覆盖详情及既有焦点循环、未保存处理；列表筛选仅影响呈现，不改记录状态。共享 workspace.css 负责三栏宽度、紧凑录入和阶梯切角。关闭按钮经 request-close 回到原有领域草稿门禁。最小化和置顶由宿主执行。
 
 ## 验证
 

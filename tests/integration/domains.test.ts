@@ -49,7 +49,7 @@ test("N07 same name is isolated, changed program is rejected and concurrent regi
   await registry.register(definition, "original");
   await registry.register({ ...definition, domainId: "example.second" }, "second");
   assert.equal((await registry.list()).length, 2);
-  await assert.rejects(registry.register({ ...definition, version: "2.0.0" }, "upgrade"), /不同程序或版本/);
+  await assert.rejects(registry.register({ ...definition, version: "2.0.0", schema: { ...definition.schema, required: ["missing"] } }, "upgrade"), /不同程序或版本/);
   const other = await SqliteLocalStore.open({ databasePath: path });
   try {
     const first = { ...definition, domainId: "example.race" };
@@ -58,6 +58,26 @@ test("N07 same name is isolated, changed program is rejected and concurrent regi
     assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
     assert.equal((await registry.list()).length, 3);
   } finally { await other.close(); }
+}));
+
+test("compatible optional field registration upgrades preserve records, enabled state and survive restart", async () => fixture(async (store, programs, path) => {
+  const definition = parseExtension(sample);
+  const registry = new DomainRegistry("space", store, programs);
+  await registry.register(definition, "register-legacy");
+  await registry.setEnabled(definition.domainId, true, "enable-legacy");
+  const scope = {workspaceId:"space",domainId:definition.domainId,recordId:"legacy"};
+  await store.commit({...scope,operationId:"legacy",kind:"put",payloadJson:JSON.stringify({quote:"旧记录",book:"书名"})});
+  const original = await store.readRecord(scope);
+  const upgraded = parseExtension(JSON.stringify({...definition,version:"1.1.0",schema:{...definition.schema,properties:{...definition.schema.properties as object,notes:{type:"string"}}},view:{...definition.view,fields:[...definition.view.fields,"notes"]}}));
+  await registry.register(upgraded,"upgrade-fields");
+  assert.deepEqual(await store.readRecord(scope),original);
+  assert.equal((await registry.get(definition.domainId)).enabled,true);
+  validateExtensionRecord(upgraded, original!.payload!);
+  const reopened = await SqliteLocalStore.open({databasePath:path});
+  try {
+    assert.equal((await new DomainRegistry("space",reopened,programs).get(definition.domainId)).definition.version,"1.1.0");
+    assert.deepEqual(await reopened.readRecord(scope),original);
+  } finally {await reopened.close();}
 }));
 
 test("N07 malformed packages, scripts and cross-domain access are rejected; valid independent data is supported", () => {

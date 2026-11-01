@@ -2,6 +2,7 @@ import type { ContentValue, JsonObject, LocalRecord } from "@workspace/contracts
 import { canonical } from "@workspace/contracts";
 import { prepareTodoMutation } from "./progression.js";
 import type { TodoCommand } from "./progression.js";
+import { currentTodoRows } from "./repetition.js";
 import { projectTodo } from "./review.js";
 import type { TodoDisplay } from "./review.js";
 
@@ -57,6 +58,8 @@ export function todoSubtreeBasis(rows: readonly LocalRecord[], id: string): stri
 
 export function prepareTodoTree(rows: readonly LocalRecord[], id: string, command: TodoCommand, at: string): TodoValue[] {
   if (!command || typeof command!=="object" || (command.kind==="move" && (!["before","inside","after"].includes(command.position) || (command.targetId!==null && typeof command.targetId!=="string")))) throw new Error("无效的拖动操作。");
+  const originalRows = rows;
+  rows = currentTodoRows(rows, at);
   const source = rows.find(r => r.recordId === id && !r.deleted);
   if (!source?.payload) throw new Error("这条任务已不存在。");
   const values = new Map(rows.map(r => [r.recordId, r.deleted ? null : r.payload]));
@@ -96,13 +99,13 @@ export function prepareTodoTree(rows: readonly LocalRecord[], id: string, comman
       seen.add(parent);
       const ancestor = values.get(parent);
       if (!ancestor) throw new Error("父事项已不存在。");
-      if (ancestor.completed === true) { const restored: JsonObject = { ...ancestor,completed:false }; delete restored.completedAt; values.set(parent,restored); }
+      if (ancestor.completed === true) { const restored: JsonObject = { ...ancestor,completed:false }; delete restored.completedAt; if (restored.repeatFrequency) restored.repeatCount = 0; values.set(parent,restored); }
       parent = ancestor.parentId as string | undefined;
     }
   }
   validateTodoTree([...values].map(([recordId,value]) => ({recordId,value})));
   return [id,...rows.map(r=>r.recordId).filter(key=>key!==id)]
-    .filter(key=>key===id || canonical(values.get(key))!==canonical(rows.find(r=>r.recordId===key)?.deleted ? null : rows.find(r=>r.recordId===key)?.payload))
+    .filter(key=>key===id || canonical(values.get(key))!==canonical(originalRows.find(r=>r.recordId===key)?.deleted ? null : originalRows.find(r=>r.recordId===key)?.payload))
     .map(recordId=>({recordId,value:values.get(recordId) ?? null}));
 }
 
@@ -116,6 +119,7 @@ function compareTodoOrder(a: LocalRecord,b: LocalRecord,field: string): number {
 }
 
 export function groupTodoTree(rows: readonly LocalRecord[],today:string): { unfinished:TodoNode[]; completed:TodoNode[]; completedRoots:number } {
+  rows = currentTodoRows(rows, new Date().toISOString());
   const live=rows.filter(r=>!r.deleted && r.payload);
   const lookup=new Map(live.map(r=>[r.recordId,r]));
   const children=new Map<string|null,LocalRecord[]>();

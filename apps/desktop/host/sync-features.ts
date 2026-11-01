@@ -1,3 +1,4 @@
+import { matchesPreset } from "@workspace/contracts";
 import { validateExtensionRecord } from "@workspace/extension-sdk";
 import type { DomainRegistration } from "@workspace/contracts";
 import { ipcMain, powerMonitor } from "electron";
@@ -12,6 +13,7 @@ import type { SyncScreen } from "../bridge/workspace-contracts.js";
 export function installSyncFeatures(check: (event: IpcMainInvokeEvent) => void, binding: () => WorkspaceBinding | null,
   remote: () => Promise<HttpSyncRemote>, base: () => string) {
   let stopped = false;
+  let paused = false;
   let recovered = false;
   let active: Promise<SyncScreen> | null = null;
   let again = false;
@@ -26,7 +28,7 @@ export function installSyncFeatures(check: (event: IpcMainInvokeEvent) => void, 
       if (!recovered) { await store.recoverFrozen(current.workspace.workspaceId); recovered = true; }
       const registrations = await store.listRecords({ workspaceId: current.workspace.workspaceId, domainId: "system.domains" });
       const engine = new SyncEngine(current.workspace, store, await remote(), (domain) => domain === "builtin.todo" ? todoConflictPolicy : domain === "system.domains" ? {
-        attributes: { enabled: ["enabled"] }, validate: () => undefined,
+        attributes: { enabled: ["enabled", "removed"], name: ["displayName"], program: ["definition", "fingerprint"] }, validate: () => undefined,
       } : (() => {
         const registration = registrations.find((entry) => entry.recordId === domain)?.payload as unknown as DomainRegistration | undefined;
         return registration ? { attributes: {}, validate: (value: import("@workspace/contracts").ContentValue) => { if (value !== null) validateExtensionRecord(registration.definition, value); } } : undefined;
@@ -34,7 +36,12 @@ export function installSyncFeatures(check: (event: IpcMainInvokeEvent) => void, 
       const errors = await engine.run();
       // This built-in program ships with the host. Acquiring registration never
       // installs or downloads a third-party extension on another device.
-      await new FileExtensionPrograms(join(base(), "programs", current.workspace.workspaceId)).stage(todoDefinition);
+      const programs = new FileExtensionPrograms(join(base(), "programs", current.workspace.workspaceId));
+      await programs.stage(todoDefinition);
+      for (const row of await store.listRecords({ workspaceId: current.workspace.workspaceId, domainId: "system.domains" })) {
+        const entry = row.payload as unknown as DomainRegistration | null;
+        if (!row.deleted && entry && !entry.removed && matchesPreset(entry.definition)) await programs.stage(entry.definition);
+      }
       const summary = await store.syncSummary(current.workspace.workspaceId);
       state = { ...summary, phase: summary.conflicts ? "conflict" : summary.uncertain ? "unconfirmed" : errors.length ? "failed" : summary.pending ? "pending" : "synced",
         message: summary.conflicts ? "存在待处理冲突；其他独立内容可继续同步。" : errors.length ? errors[0]! : summary.pending ? "本机成果已保存，仍有改动待统一位置确认。" : "当前已保存改动已获统一位置确认，并已取得最新进度。",
@@ -47,7 +54,7 @@ export function installSyncFeatures(check: (event: IpcMainInvokeEvent) => void, 
     return state;
   }
   function trigger(saved = false): Promise<SyncScreen> {
-    if (stopped || !binding()) return Promise.resolve(state);
+    if (stopped || paused || !binding()) return Promise.resolve(state);
     if (active) { if (saved) again = true; return active; }
     active = (async () => {
       let result = state;
@@ -68,5 +75,5 @@ export function installSyncFeatures(check: (event: IpcMainInvokeEvent) => void, 
   const tick = () => { void trigger(); };
   const timer = setInterval(tick, 10000); timer.unref();
   powerMonitor.on("resume", tick);
-  return { trigger, stop: async () => { stopped = true; clearInterval(timer); powerMonitor.removeListener("resume", tick); await active; } };
+  return { trigger, suspend: async () => { paused = true; again = false; await active; }, resume: (reset = true) => { if (reset) { recovered = false; state = { phase: "pending", message: "正在接续所选空间。", pending: 0, uncertain: 0, conflicts: 0, confirmed: 0, cursor: 0, lastSuccessAt: null }; } paused = false; if (reset) void trigger(); }, stop: async () => { stopped = true; clearInterval(timer); powerMonitor.removeListener("resume", tick); await active; } };
 }

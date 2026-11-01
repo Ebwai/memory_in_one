@@ -1,0 +1,42 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { _electron } from 'playwright-core';
+import { createRequire } from 'node:module';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+test('floating resize, plugin switching, fold state and keyboard capture', async () => {
+  const require = createRequire(import.meta.url);
+  const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: mkdtempSync(join(tmpdir(), 'floating-controls-')), WORKSPACE_SETUP_HIDDEN: '1' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const app = await _electron.launch({ executablePath: require('electron'), args: ['apps/desktop/dist/host/workspace-main.js'], env });
+  try {
+    const page = await app.firstWindow();
+    await page.getByRole('button', { name: '创建新工作空间', exact: true }).click();
+    await page.getByRole('button', { name: '确认创建', exact: true }).click();
+    await page.getByTestId('todo-capture').waitFor();
+    await page.getByRole('button', { name: '切换工作台与悬浮窗' }).click();
+    await page.getByLabel('当前插件').waitFor();
+    assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isResizable()), true);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(520, 720));
+    await page.getByRole('button', { name: '未完成 ▾', exact: true }).click();
+    assert.equal(await page.getByTestId('unfinished-todos').isVisible(), false);
+    await page.keyboard.type('keyboard capture');
+    assert.equal(await page.getByLabel('任务内容', { exact: true }).inputValue(), 'keyboard capture');
+    await page.getByLabel('任务内容', { exact: true }).press('Enter');
+    await page.getByRole('button', { name: '未完成 ▸', exact: true }).click();
+    await page.getByRole('button', { name: '删除待办：keyboard capture', exact: true }).click();
+    await page.getByRole('group', { name: '确认删除待办', exact: true }).waitFor();
+    await page.getByRole('button', { name: '取消删除', exact: true }).click();
+    await page.getByRole('button', { name: '关闭详情', exact: true }).click();
+    assert.equal(await page.getByTestId('captured-todo').count(), 1);
+    const notes = await page.getByLabel('当前插件').locator('option').evaluateAll(items => items.find(item => item.textContent.includes('随记'))?.value);
+    await page.getByLabel('当前插件').selectOption(notes);
+    await page.getByTestId('domain-view').waitFor();
+    assert.equal(await page.locator('body').evaluate(el => el.classList.contains('floating')), true);
+    await page.getByLabel('当前插件').selectOption('builtin.todo');
+    assert.equal(await page.getByRole('button', { name: '未完成 ▾', exact: true }).getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.getByRole('button', { name: '已完成（0）', exact: true }).getAttribute('aria-expanded'), 'false');
+    await page.screenshot({ path: 'output/ui-preview/floating-controls.png' });
+  } finally { await app.close(); }
+});

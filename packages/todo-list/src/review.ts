@@ -1,6 +1,11 @@
 import type { LocalRecord } from "@workspace/contracts";
 
+import { currentTodo } from "./repetition.js";
 export interface TodoDisplay {
+  readonly notes: string;
+  readonly repeatFrequency: string | null;
+  readonly repeatTarget: number;
+  readonly repeatCount: number;
   readonly recordId: string;
   readonly text: string;
   readonly status: "unfinished" | "completed" | "unknown";
@@ -29,7 +34,7 @@ export function localCalendarDate(date: Date): string {
 
 export function projectTodo(record: LocalRecord, today: string): TodoDisplay | null {
   if (record.deleted) return null;
-  const payload = record.payload;
+  const payload = record.payload ? currentTodo(record.payload, new Date().toISOString()) : null;
   const warnings: string[] = [];
   const text = typeof payload?.text === "string" ? payload.text : "任务内容无法识别";
   if (typeof payload?.text !== "string") warnings.push("任务内容无法识别");
@@ -45,7 +50,7 @@ export function projectTodo(record: LocalRecord, today: string): TodoDisplay | n
     else if (!isCalendarDate(today)) warnings.push("当前设备日期无法识别，无法判定时间状态");
     else dateLabel = dueDate === today ? "今天到期" : dueDate < today ? "已逾期 · " + dueDate : "截止 " + dueDate;
   }
-  return { recordId: record.recordId, text, status, dueDate, dueState, dateLabel, warning: warnings.length ? warnings.join("；") : null,
+  return { notes: typeof payload?.notes === "string" ? payload.notes : "", repeatFrequency: typeof payload?.repeatFrequency === "string" ? payload.repeatFrequency : null, repeatTarget: Number(payload?.repeatTarget ?? 0), repeatCount: Number(payload?.repeatCount ?? 0), recordId: record.recordId, text, status, dueDate, dueState, dateLabel, warning: warnings.length ? warnings.join("；") : null,
     createdAt: typeof payload?.createdAt === "string" ? payload.createdAt : null,
     completedAt: typeof payload?.completedAt === "string" ? payload.completedAt : null,
     localSequence: record.localSequence };

@@ -6,6 +6,8 @@ paths:
 
 # TDD 导航
 
+2026-11-01：[预设模板与独立插件](../.claude/rules/tdd/preset-plugins.md)，承接项目模板多实例、单一随记入口、名称与身份分离、整体删除及共享同步门禁。
+
 2026-10-29：[SSH 与圆角窗口](../.claude/rules/tdd/ssh-window.md)，承接内置服务器连接和参考图圆角悬浮外观。
 
 2026-10-28 接续：[桌面应用更新](../.claude/rules/tdd/desktop-update.md)，覆盖 N71–N73 的版本发现、下载校验、退出协调及安装回退。
@@ -36,3 +38,9 @@ Architecture 基线已于 2026-10-25 经用户确认。当前实现 N01–N70，
 
 完整产品队列仍由 [PRD](PRD.md) 维护。N41–N43 整合沿既有同步和领域链验收；N44–N49 见 MCP 设计；N50–N53 完成来源确认、一致快照和完整文件交付，见[导出快照与交付](../.claude/rules/tdd/portability.md)；N54–N62 完成恢复、迁移、独立领域及交付包整合，沿同一设计维护。正常回环联通环境通过双桌面时效验证，未声称公网、移动端或具名外部 Agent 客户端已验收。
 
+# 新增技术导航
+
+- [备注、周期重复与兼容字段升级](../.claude/rules/tdd/todo-repetition.md)
+
+
+2026-11-01：[管理控制中心与空间目录](../.claude/rules/tdd/management-spaces.md)，承接四个管理页面、多空间选择、同步暂停切换及导出前同步核对。

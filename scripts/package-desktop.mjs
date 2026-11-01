@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { DESKTOP_VERSION } from "../apps/desktop/dist/bridge/update-contracts.js";
 
 if (process.platform !== "win32") throw new Error("Build Windows distribution on Windows.");
-const source = resolve(".build/release/workspace-windows-v0.1.0");
+const source = resolve(`.build/release/workspace-windows-v${DESKTOP_VERSION}`);
 const output = resolve(`.build/release/workspace-windows-v${DESKTOP_VERSION}-${process.arch}.zip`);
 const temporary = output.replace(/\.zip$/, `-${Date.now()}.partial.zip`);
 // Paths travel as environment values, never as interpolated PowerShell code.

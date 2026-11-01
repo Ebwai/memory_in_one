@@ -16,6 +16,8 @@ export interface DomainRegistration {
   readonly definition: ExtensionDefinition;
   readonly fingerprint: string;
   readonly enabled: boolean;
+  readonly displayName?: string;
+  readonly removed?: boolean;
 }
 export interface ExtensionPrograms {
   stage(definition: ExtensionDefinition): Promise<string>;

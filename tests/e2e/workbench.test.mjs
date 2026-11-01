@@ -90,6 +90,7 @@ test("N11–N15 floating capture handles IME, paste, repeat intent, real failure
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
     await page.getByTestId("todo-capture").waitFor();
+    await page.getByRole("button", { name: "悬浮窗口", exact: true }).click();
     const input = page.getByLabel("任务内容", { exact: true });
     assert.equal(await application.evaluate(async ({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0];

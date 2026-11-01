@@ -1,6 +1,6 @@
 {
   "name": "personal-information-workspace",
-  "version": "0.1.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "pnpm build && node --test --test-concurrency=1 .build/tests/integration/local-persistence.test.js .build/tests/integration/save-status.test.js .build/tests/integration/reliable-save.test.js .build/tests/integration/workspace-initialization.test.js .build/tests/integration/domains.test.js .build/tests/integration/todo-review.test.js .build/tests/integration/todo-progress.test.js .build/tests/integration/todo-tree.test.js .build/tests/integration/conflicts.test.js .build/tests/integration/replication.test.js .build/tests/integration/mcp.test.js .build/tests/integration/export-scope.test.js .build/tests/integration/snapshot.test.js .build/tests/integration/archive.test.js .build/tests/integration/recovery.test.js .build/tests/integration/migration.test.js",
+    "test": "pnpm build && node --test --test-concurrency=1 .build/tests/integration/local-persistence.test.js .build/tests/integration/save-status.test.js .build/tests/integration/reliable-save.test.js .build/tests/integration/workspace-initialization.test.js .build/tests/integration/domains.test.js .build/tests/integration/preset-plugins.test.js .build/tests/integration/todo-review.test.js .build/tests/integration/todo-progress.test.js .build/tests/integration/todo-repetition.test.js .build/tests/integration/todo-tree.test.js .build/tests/integration/conflicts.test.js .build/tests/integration/replication.test.js .build/tests/integration/mcp.test.js .build/tests/integration/export-scope.test.js .build/tests/integration/snapshot.test.js .build/tests/integration/archive.test.js .build/tests/integration/recovery.test.js .build/tests/integration/migration.test.js",
     "test:electron": "pnpm build && node scripts/test-electron.mjs",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "demo:persistence": "pnpm build && node scripts/demo-persistence.mjs",
@@ -20,7 +20,7 @@
     "demo:workspace": "pnpm build:status-demo && node scripts/run-workspace.mjs",
     "start:server": "pnpm build && node apps/server/dist/composition/main.js",
     "test:status-ui": "pnpm build:status-demo && node --test tests/e2e/status-demo.test.mjs",
-    "test:workspace-ui": "pnpm build:status-demo && node --test --test-concurrency=1 tests/e2e/workspace-setup.test.mjs tests/e2e/workbench.test.mjs tests/e2e/todo-review.test.mjs tests/e2e/todo-progress.test.mjs tests/e2e/todo-tree.test.mjs tests/e2e/conflicts.test.mjs tests/e2e/replication.test.mjs tests/e2e/mcp-management.test.mjs tests/e2e/portability.test.mjs",
+    "test:workspace-ui": "pnpm build:status-demo && node --test --test-concurrency=1 tests/e2e/workspace-setup.test.mjs tests/e2e/workbench.test.mjs tests/e2e/preset-plugins.test.mjs tests/e2e/todo-review.test.mjs tests/e2e/todo-progress.test.mjs tests/e2e/todo-repetition.test.mjs tests/e2e/todo-tree.test.mjs tests/e2e/conflicts.test.mjs tests/e2e/replication.test.mjs tests/e2e/mcp-management.test.mjs tests/e2e/portability.test.mjs",
     "check": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm test:electron && pnpm test:status-ui && pnpm test:workspace-ui && pnpm test:mcp && pnpm test:release && node --test tests/e2e/server-deployment.test.mjs && node --test --test-concurrency=1 tests/e2e/desktop-update.test.mjs tests/e2e/ssh-tunnel.test.mjs",
     "test:mcp": "pnpm build && node --test tests/e2e/mcp.test.mjs",
     "build:server": "pnpm build && node scripts/build-server-release.mjs",

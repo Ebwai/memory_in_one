@@ -16,6 +16,7 @@ export interface WorkspaceScreen {
 }
 export type WorkspaceScreenResult = WorkspaceCreateResult & { readonly binding?: WorkspaceBinding };
 export interface ConnectionForm {
+  readonly additional?: boolean;
   readonly kind: "local" | "remote"; readonly directory: string; readonly url: string; readonly token: string;
 }
 export type ConnectionResult =
@@ -24,6 +25,7 @@ export type ConnectionResult =
   | { readonly status: "rejected"; readonly message: string };
 export type DomainResponse = { readonly ok: false; readonly outcome?: "not-saved" | "unconfirmed"; readonly message: string } | { readonly ok: true; readonly conflicts?: readonly import("@workspace/contracts").RetainedConflict[]; readonly conflict?: import("@workspace/contracts").RetainedConflict; readonly message?: string; readonly domains?: readonly import("@workspace/contracts").DomainEntry[]; readonly save?: import("@workspace/contracts").LocalSaveResult; readonly workspaceId?: string; readonly record?: import("@workspace/contracts").LocalRecord | null; readonly records?: readonly import("@workspace/contracts").LocalRecord[]; readonly preview?: import("@workspace/contracts").ExtensionDefinition };
 export interface WorkspaceBridge {
+  spaces(action: "list" | "switch", workspaceId?: string): Promise<{ spaces: readonly WorkspaceBinding[]; binding: WorkspaceBinding | null }>;
   tunnel(action: "status" | "save" | "key" | "disconnect", config?: import("../host/ssh-tunnel.js").TunnelConfig): Promise<import("../host/ssh-tunnel.js").TunnelScreen>;
   update(action: import("./update-contracts.js").UpdateAction): Promise<import("./update-contracts.js").UpdateScreen>;
   migration(action: "status" | "stop" | "switch", target?: ConnectionForm & { isolated: boolean }): Promise<{ message: string; state?: string; binding?: WorkspaceBinding }>;

@@ -4,7 +4,7 @@ import type { DomainViewHandle } from "./domain-view.js";
 
 function describe(value: ContentValue) {
   if (value === null) return "已删除";
-  return `${String(value.text ?? "内容不可读")}\n截止日期：${String(value.dueDate ?? "未设置")}\n${value.completed ? "已完成 · " + String(value.completedAt ?? "时间不可读") : "未完成"}`;
+  return `${String(value.text ?? "内容不可读")}\n备注：${String(value.notes ?? "未填写")}\n重复进度：${String(value.repeatCount ?? 0)}/${String(value.repeatTarget ?? 0)} · ${String(value.repeatFrequency ?? "不重复")}\n截止日期：${String(value.dueDate ?? "未设置")}\n${value.completed ? "已完成 · " + String(value.completedAt ?? "时间不可读") : "未完成"}`;
 }
 
 export const ConflictPanel = forwardRef<DomainViewHandle, { domain?: DomainEntry; onPending(ids: readonly string[]): void }>(function ConflictPanel({ onPending, domain }, ref) {

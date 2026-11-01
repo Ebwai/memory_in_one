@@ -153,6 +153,7 @@ test("existing remote workspace requires confirmation, preserves binding on fail
     assert.equal(existsSync(join(client, "binding.json")), false);
     await page.getByRole("button", { name: "确认接入此空间", exact: true }).click();
     await page.getByTestId("workspace-id").getByText(identity.workspaceId, { exact: true }).waitFor();
+    await page.evaluate(async () => { await window.workspaceSetup.domains({ action: "list" }); await window.workspaceSetup.sync("now"); });
     const original = readFileSync(join(client, "binding.json"), "utf8");
     assert.equal(original.includes(token), false);
     const binding = JSON.parse(original);
@@ -168,7 +169,7 @@ test("existing remote workspace requires confirmation, preserves binding on fail
       assert.equal(result.status, "rejected");
       assert.match(result.message, message);
       assert.equal(readFileSync(join(client, "binding.json"), "utf8"), original);
-      assert.deepEqual(readFileSync(binding.replicaPath), replica);
+      assert.equal(Buffer.compare(readFileSync(binding.replicaPath), replica), 0);
     }
     assert.equal(existsSync(join(directory, "empty", "workspace.sqlite")), false);
     const preview = await page.evaluate(async ({ url, token }) => window.workspaceSetup.inspect({ kind: "remote", directory: "", url, token }), { url: server.url, token });
@@ -183,7 +184,7 @@ test("existing remote workspace requires confirmation, preserves binding on fail
     await page.getByTestId("workspace-id").getByText(identity.workspaceId, { exact: true }).waitFor();
     await page.getByRole("alert").getByText(/已保留原空间绑定/).waitFor();
     assert.equal(readFileSync(join(client, "binding.json"), "utf8"), original);
-    assert.deepEqual(readFileSync(binding.replicaPath), replica);
+    assert.equal(Buffer.compare(readFileSync(binding.replicaPath), replica), 0);
     assert.equal(await page.getByRole("button", { name: "重新核验已有空间", exact: true }).isEnabled(), true);
   } finally {
     if (application) await application.close();

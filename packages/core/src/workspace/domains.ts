@@ -1,3 +1,4 @@
+import { isProjectDomain, isPresetDomain, matchesPreset } from "@workspace/contracts";
 import { prepareDomainRegistration, prepareDomainEnabled } from "./domain-changes.js";
 import type { DomainEntry, DomainRegistration, ExtensionDefinition, ExtensionPrograms, LocalPersistence } from "@workspace/contracts";
 
@@ -6,22 +7,24 @@ export class DomainRegistry {
   constructor(private readonly workspaceId: string, private readonly store: LocalPersistence, private readonly programs: ExtensionPrograms, private readonly canRemoveProgram: (definition: ExtensionDefinition) => boolean = () => true) {}
   async list(): Promise<readonly DomainEntry[]> {
     const records = await this.store.listRecords({ workspaceId: this.workspaceId, domainId: DOMAIN_REGISTRY });
-    return Promise.all(records.filter((record) => !record.deleted).map(async (record) => {
+    return Promise.all(records.filter((record) => !record.deleted && record.payload?.removed !== true).map(async (record) => {
       const registration = record.payload as unknown as DomainRegistration;
       return { ...registration, programAvailable: await this.programs.available(registration.fingerprint) };
     }));
   }
   async register(definition: ExtensionDefinition, operationId: string): Promise<"registered" | "already-registered" | "program-restored"> {
+    if (isPresetDomain(definition.domainId) && !matchesPreset(definition)) throw new Error("预设模板声明不匹配。");
     const scope = { workspaceId: this.workspaceId, domainId: DOMAIN_REGISTRY, recordId: definition.domainId };
     const existing = await this.store.readRecord(scope);
     const old = existing?.payload as unknown as DomainRegistration | undefined;
-    // Exact package equality is deliberate: registration is not an upgrade or a data migration.
+    // Optional additive fields can upgrade without rewriting old records.
     prepareDomainRegistration(old ?? null, definition, "");
+    if (old?.removed) throw new Error("此项目已删除，不能重新注册恢复。");
     const wasAvailable = old ? await this.programs.available(old.fingerprint) : false;
     const fingerprint = await this.programs.stage(definition);
-    if (old) return wasAvailable ? "already-registered" : "program-restored";
-    const registration: DomainRegistration = { definition, fingerprint, enabled: false };
-    await this.store.commit({ ...scope, operationId, kind: "put", payloadJson: JSON.stringify(registration) }, null);
+    if (old && JSON.stringify(old.definition) === JSON.stringify(definition)) return wasAvailable ? "already-registered" : "program-restored";
+    const registration: DomainRegistration = { definition, fingerprint, enabled: old?.enabled ?? false };
+    await this.store.commit({ ...scope, operationId, kind: "put", payloadJson: JSON.stringify(registration) }, existing?.localSequence ?? null);
     return "registered";
   }
   async get(domainId: string): Promise<DomainEntry> {
@@ -65,6 +68,23 @@ export class DomainRegistry {
     if (!record?.payload) throw new Error("领域登记不可用。");
     const old = record.payload as unknown as DomainRegistration;
     const next = prepareDomainEnabled(old, enabled, entry.programAvailable);
+    await this.store.commit({ ...scope, operationId, kind: "put", payloadJson: JSON.stringify(next) }, record.localSequence);
+  }
+
+  async manageProject(domainId: string, operationId: string, name: string | null): Promise<void> {
+    const previous = await this.store.readOperation({ workspaceId: this.workspaceId, domainId: DOMAIN_REGISTRY, recordId: domainId, operationId });
+    if (previous) {
+      const value = previous.payloadJson ? JSON.parse(previous.payloadJson) as DomainRegistration : null;
+      if (!value || (name === null ? !value.removed : value.displayName !== name.trim())) throw new Error("原操作身份与项目变更不匹配。");
+      return;
+    }
+    const entry = await this.get(domainId);
+    if (!isProjectDomain(domainId) || !matchesPreset(entry.definition)) throw new Error("请选择项目模板创建的插件。");
+    if (name !== null && (!name.trim() || name.trim().length > 100)) throw new Error("项目名称须为 1 至 100 个字符。");
+    const scope = { workspaceId: this.workspaceId, domainId: DOMAIN_REGISTRY, recordId: domainId };
+    const record = await this.store.readRecord(scope);
+    if (!record?.payload || record.payload.removed) throw new Error("项目已删除或不可用。");
+    const next = name === null ? { ...record.payload, removed: true, enabled: false } : { ...record.payload, displayName: name.trim() };
     await this.store.commit({ ...scope, operationId, kind: "put", payloadJson: JSON.stringify(next) }, record.localSequence);
   }
 }

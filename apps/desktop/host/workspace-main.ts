@@ -32,7 +32,7 @@ let stopped = false;
 let updater: DesktopUpdater | undefined;
 let tunnel: SshTunnel | undefined;
 
-let connection: { ticket: string; target: PrivateBinding; token: string } | null = null;
+let connection: { ticket: string; target: PrivateBinding; token: string; additional?: boolean } | null = null;
 
 // Existing locations must never acquire new authority files merely by opening them.
 function existingLocalToken(directory: string): string {
@@ -50,10 +50,18 @@ import { todoDefinition, TODO_DOMAIN } from "@workspace/todo-list";
 
 
 function atomicJson(path: string, value: unknown): void {
+  const prior = path === join(base, "binding.json") ? readJson<PrivateBinding>(path) : null;
   const temp = path + "." + randomUUID() + ".tmp";
   const descriptor = openSync(temp, "wx", 0o600);
   try { writeFileSync(descriptor, JSON.stringify(value)); fsyncSync(descriptor); } finally { closeSync(descriptor); }
   renameSync(temp, path);
+  if (path === join(base, "binding.json")) {
+    const entries = readJson<PrivateBinding[]>(join(base, "spaces.json")) ?? [];
+    const map = new Map(entries.map(item => [item.workspace.workspaceId, item]));
+    if (prior) map.set(prior.workspace.workspaceId, prior);
+    const next = value as PrivateBinding; map.set(next.workspace.workspaceId, next);
+    atomicJson(join(base, "spaces.json"), [...map.values()]);
+  }
 }
 function publicBinding(value: PrivateBinding): WorkspaceBinding {
   return { workspace: value.workspace, kind: value.kind, location: value.location, endpoint: value.endpoint, replicaPath: value.replicaPath };
@@ -297,6 +305,22 @@ app.whenReady().then(async () => {
     if (!response.ok) throw new Error(result.message ?? "管理结果尚不能确认，请刷新核对。");
     return result;
   });
+  ipcMain.handle("workspace:spaces", async (event, action: unknown, id: unknown) => {
+    check(event); await startup;
+    const entries = readJson<PrivateBinding[]>(join(base, "spaces.json")) ?? [];
+    const map = new Map(entries.map(item => [item.workspace.workspaceId, item]));
+    if (binding) map.set(binding.workspace.workspaceId, binding);
+    if (action === "switch") {
+      if (busy || typeof id !== "string") throw new Error("空间请求正在处理。");
+      const target = map.get(id); if (!target) throw new Error("空间未登记。");
+      busy = true; await sync.suspend();
+      try {
+        const endpoint = target.kind === "local" ? await localServer(target.directory, existingLocalToken(target.directory)) : target.endpoint;
+        const next = { ...target, endpoint }; atomicJson(join(base, "binding.json"), next); binding = next; problem = null;
+      } finally { busy = false; sync.resume(); }
+    } else if (action !== "list") throw new Error("无效空间操作。");
+    return { spaces: [...map.values()].map(publicBinding), binding: binding ? publicBinding(binding) : null };
+  });
   ipcMain.handle("workspace:choose-directory", async (event) => {
     check(event);
     const selected = await dialog.showOpenDialog(window, { properties: ["openDirectory"] });
@@ -323,13 +347,15 @@ app.whenReady().then(async () => {
         try { endpoint = workspaceServiceUrl(form.url).href; }
         catch { throw new Error("服务器地址无效，请填写 HTTPS 地址；回环地址可使用 HTTP。"); }
       }
-      const workspace = await inspectExistingWorkspace(new HttpWorkspaceLocation(endpoint, token), binding?.workspace ?? null);
+      const workspace = await inspectExistingWorkspace(new HttpWorkspaceLocation(endpoint, token), form.additional ? null : binding?.workspace ?? null);
+      const known = (readJson<PrivateBinding[]>(join(base, "spaces.json")) ?? []).find(entry => entry.workspace.workspaceId === workspace.workspaceId);
+      if (known && known.workspace.authorityId !== workspace.authorityId) throw new Error("该空间身份对应另一个统一位置，请通过迁移流程切换。");
       const target: PrivateBinding = { workspace, kind: form.kind, endpoint,
         directory: form.directory, location: form.kind === "local" ? form.directory : endpoint,
-        replicaPath: binding?.replicaPath ?? join(base, "replicas", workspace.workspaceId, "replica.sqlite"),
+        replicaPath: binding?.workspace.workspaceId === workspace.workspaceId ? binding.replicaPath : join(base, "replicas", workspace.workspaceId, "replica.sqlite"),
         secret: form.kind === "remote" ? await encrypt(token) : "" };
       const ticket = randomUUID();
-      connection = { ticket, target, token };
+      connection = { ticket, target, token, additional: form.additional === true };
       return { status: "verified", ticket, workspace, location: target.location };
     } catch (error) {
       const message = error instanceof Error && /[\u4e00-\u9fff]/.test(error.message)
@@ -347,21 +373,23 @@ app.whenReady().then(async () => {
     connection = null;
     busy = true;
     try {
+      await sync.suspend();
       const { target, token } = verified;
       await inspectExistingWorkspace(new HttpWorkspaceLocation(target.endpoint, token), target.workspace);
-      if (binding && (binding.workspace.workspaceId !== target.workspace.workspaceId ||
+      if (!verified.additional && binding && (binding.workspace.workspaceId !== target.workspace.workspaceId ||
           binding.workspace.authorityId !== target.workspace.authorityId)) throw new Error("原绑定已变化，请重新核验。");
       const replica = await SqliteLocalStore.open({ databasePath: target.replicaPath });
       await replica.close();
       atomicJson(join(base, "binding.json"), target);
       binding = target;
-      void sync.trigger();
+      sync.resume(true);
+      await sync.trigger();
       problem = null;
       return { status: "connected", binding: publicBinding(target) };
     } catch (error) {
       return { status: "rejected", message: error instanceof Error && /[\u4e00-\u9fff]/.test(error.message)
         ? error.message : "暂时无法确认接入，原绑定及本机内容已保留，请重新核验。" };
-    } finally { busy = false; }
+    } finally { busy = false; sync.resume(false); }
   });
   ipcMain.handle("workspace:create", async (event, raw: unknown): Promise<WorkspaceScreenResult> => {
     check(event); await startup;
@@ -380,6 +408,7 @@ app.whenReady().then(async () => {
     connection = null;
     busy = true;
     let attempted = false;
+    await sync.suspend();
     try {
       const name = form.name.trim();
       if (form.kind === "local" && (!form.directory || !isAbsolute(form.directory))) throw new Error("请选择本机的完整存放路径。");
@@ -419,14 +448,14 @@ app.whenReady().then(async () => {
       await provisionTodo(next, base);
       atomicJson(join(base, "binding.json"), next);
       binding = next;
-      void sync.trigger();
+      sync.resume(true);
       try { unlinkSync(join(base, "pending.json")); } catch { /* Completed binding is the durable result. */ }
       pending = null;
       return { ...result, binding: publicBinding(next) };
     } catch (error) {
       const message = error instanceof Error ? error.message : "创建结果暂不能确认，请按原操作重试。";
       return attempted ? { status: "unconfirmed", message } : { status: "rejected", reason: "unavailable", message };
-    } finally { busy = false; }
+    } finally { busy = false; sync.resume(false); }
   });
   const applicationRoot = dirname(process.execPath);
   let updateAcknowledged = false;
@@ -460,8 +489,8 @@ app.whenReady().then(async () => {
     if (action === "request-close") { window.close(); return; }
     if (action === "minimize") { window.minimize(); return; }
     if (action === "close") { closeAllowed = true; window.close(); return; }
-    if (action === "floating") { window.setAlwaysOnTop(true); window.setSize(440, 650); window.setTitle("待办随手记"); }
-    else if (action === "management") { window.setAlwaysOnTop(false); window.setSize(1000, 820); window.setTitle("统一工作空间"); }
+    if (action === "floating") { if (window.isMaximized()) window.unmaximize(); window.setResizable(true); window.setMinimumSize(340, 360); window.setAlwaysOnTop(true); window.setSize(440, 650); window.setTitle("待办随手记"); }
+    else if (action === "management") { window.setAlwaysOnTop(false); window.setSize(1280, 820); window.maximize(); window.setTitle("统一工作空间"); }
     else if (action === "pin") window.setAlwaysOnTop(true);
     else if (action === "unpin") window.setAlwaysOnTop(false);
     else throw new Error("无效窗口动作");

@@ -6,7 +6,7 @@ import { buildServerRelease } from "./build-server-release.mjs";
 import { DESKTOP_VERSION } from "../apps/desktop/dist/bridge/update-contracts.js";
 
 const require = createRequire(import.meta.url);
-const root = resolve(".build/release/workspace-windows-v0.1.0");
+const root = resolve(`.build/release/workspace-windows-v${DESKTOP_VERSION}`);
 const application = join(root, "resources/app");
 await mkdir(application, { recursive: true });
 await writeFile(join(root, "workspace-release.json"), JSON.stringify({ version: DESKTOP_VERSION, platform: "win32", arch: process.arch }, null, 2));

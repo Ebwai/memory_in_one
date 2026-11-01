@@ -6,22 +6,25 @@ import type { ProgressResult, useTodoProgress } from "./use-todo-progress.js";
 import { prepareTodoMutation, projectTodo } from "@workspace/todo-list";
 
 export const TodoDetails = forwardRef<DomainViewHandle, {
-  records: readonly LocalRecord[]; canComplete: boolean; conflicted?: boolean; snapshot: LocalRecord; today: string; onClose(): void; onMissing(recordId: string): void; progress: ReturnType<typeof useTodoProgress>;
-}>(function TodoDetails({ snapshot, today, onClose, onMissing, progress, conflicted, records, canComplete }, ref) {
+  initialDelete?: boolean; records: readonly LocalRecord[]; canComplete: boolean; conflicted?: boolean; snapshot: LocalRecord; today: string; onClose(): void; onMissing(recordId: string): void; progress: ReturnType<typeof useTodoProgress>;
+}>(function TodoDetails({ initialDelete, snapshot, today, onClose, onMissing, progress, conflicted, records, canComplete }, ref) {
   const [record, setRecord] = useState(snapshot);
   const [phase, setPhase] = useState<"loading" | "ready" | "missing" | "error">(progress.locked(snapshot.recordId) ? "ready" : "loading");
   const [message, setMessage] = useState("");
-  const [editor, setEditor] = useState<{ kind: "text" | "date"; base: LocalRecord; value: string } | null>(() => {
+  const [editor, setEditor] = useState<{ kind: "text" | "date" | "notes" | "repeat"; base: LocalRecord; value: string } | null>(() => {
     const pending = progress.pending(snapshot.recordId);
     if (pending?.command.kind === "text") return { kind: "text", base: pending.record, value: pending.command.text };
     if (pending?.command.kind === "date") return { kind: "date", base: pending.record, value: pending.command.dueDate ?? "" };
+    if (pending?.command.kind === "notes") return { kind: "notes", base: pending.record, value: pending.command.notes };
+    if (pending?.command.kind === "repeat") return { kind: "repeat", base: pending.record, value: JSON.stringify(pending.command) };
     return null;
   });
-  const [deleting, setDeleting] = useState<LocalRecord | null>(() => { const pending = progress.pending(snapshot.recordId); return pending?.command.kind === "delete" ? pending.record : null; });
-  const [deleteScope, setDeleteScope] = useState<{basis:string;count:number} | null>(null);
+  const [deleting, setDeleting] = useState<LocalRecord | null>(() => { const pending = progress.pending(snapshot.recordId); return initialDelete ? snapshot : pending?.command.kind === "delete" ? pending.record : null; });
+  const [deleteScope, setDeleteScope] = useState<{basis:string;count:number} | null>(() => initialDelete ? { basis: todoSubtreeBasis(records, snapshot.recordId), count: todoSubtree(records, snapshot.recordId).length - 1 } : null);
   const editing = useRef(false);
   editing.current = !!editor || !!deleting;
   const close = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLElement>(null);
   const dateField = useRef<HTMLInputElement>(null);
   const active = useRef(true);
   const reading = useRef(false);
@@ -46,20 +49,24 @@ export const TodoDetails = forwardRef<DomainViewHandle, {
     if (!active.current) return;
     if (result.record === null) { setPhase("missing"); onMissing(snapshot.recordId); }
     else if (result.record) { setRecord(result.record); setPhase("ready"); }
-    if (result.saved) { setEditor(null); setDeleting(null); setMessage(""); }
+    if (result.saved) { setEditor(null); setDeleting(null); setMessage(""); window.requestAnimationFrame(() => { if (panel.current) panel.current.scrollTop = 0; }); }
   }
-  async function beginEditor(kind: "text" | "date") {
+  async function beginEditor(kind: "text" | "date" | "notes" | "repeat") {
     try {
       const result = await window.workspaceSetup.domains({ action: "editor-save", recordId: record.recordId, baseSequence: record.localSequence,
         operationId: crypto.randomUUID(), draft: record.payload ?? {} });
       if (!result.ok) { setMessage(result.message); return; }
-      setEditor({ kind, base: record, value: kind === "text" ? String(record.payload?.text ?? "") : String(record.payload?.dueDate ?? "") }); setMessage("");
+      setEditor({ kind, base: record, value: kind === "repeat" ? JSON.stringify({ frequency: record.payload?.repeatFrequency ?? null, target: record.payload?.repeatTarget ?? 1, timezone: record.payload?.repeatTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone }) : String(record.payload?.[kind === "date" ? "dueDate" : kind] ?? "") }); setMessage("");
     } catch { setMessage("暂时无法保护编辑内容，请保留原任务后重试。"); }
   }
   useEffect(() => {
     if (!editor) return;
     const value = { ...editor.base.payload };
-    if (editor.kind === "text") value.text = editor.value;
+    if (editor.kind === "notes") value.notes = editor.value;
+    else if (editor.kind === "repeat") {
+      try { const mutation = prepareTodoMutation(value, { ...JSON.parse(editor.value), kind: "repeat" }, new Date().toISOString()); if (mutation.kind === "put") { for (const key of Object.keys(value)) delete value[key]; Object.assign(value, mutation.payload); } } catch { /* Keep draft even while a number is being edited. */ }
+    }
+    else if (editor.kind === "text") value.text = editor.value;
     else if (editor.value) value.dueDate = editor.value;
     else delete value.dueDate;
     editorQueue.current = editorQueue.current.then(async () => {
@@ -78,7 +85,7 @@ export const TodoDetails = forwardRef<DomainViewHandle, {
     }
     if (!editor) return !progress.locked(snapshot.recordId);
     if (editor.kind === "date" && dateField.current && !dateField.current.validity.valid) { setMessage("请输入有效的日历日期，或明确清除为未设置。"); return false; }
-    const command = editor.kind === "text" ? { kind: "text" as const, text: editor.value } : { kind: "date" as const, dueDate: editor.value || null };
+    const command = editor.kind === "repeat" ? { ...JSON.parse(editor.value), kind: "repeat" as const } : editor.kind === "notes" ? { kind: "notes" as const, notes: editor.value } : editor.kind === "text" ? { kind: "text" as const, text: editor.value } : { kind: "date" as const, dueDate: editor.value || null };
     try { prepareTodoMutation(editor.base.payload ?? {}, command, new Date().toISOString()); }
     catch (error) { setMessage(error instanceof Error ? error.message : "修改内容无效。"); return false; }
     const result = await progress.mutate(editor.base, command); accept(result); return result.saved;
@@ -95,10 +102,10 @@ export const TodoDetails = forwardRef<DomainViewHandle, {
     return () => { active.current = false; window.removeEventListener("workspace:replica-updated", resume); window.removeEventListener("focus", resume); document.removeEventListener("visibilitychange", resume); };
   }, [snapshot.recordId]);
   const display = projectTodo(record, today);
-  return <div className="todo-detail-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="todo-detail-title" className="todo-detail" data-testid="todo-details" onKeyDown={(event) => {
+  return <div className="todo-detail-backdrop"><div className="inspector-date">{new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", weekday: "short" }).format(new Date())}<span aria-hidden="true">✣</span></div><section ref={panel} role="dialog" aria-modal="true" aria-labelledby="todo-detail-title" className="todo-detail" data-testid="todo-details" onKeyDown={(event) => {
     if (event.key === "Escape") { event.stopPropagation(); requestClose(); }
     if (event.key === "Tab") {
-      const fields = event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled),input:not(:disabled),textarea:not(:disabled)");
+      const fields = event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled)");
       const first = fields[0]; const last = fields[fields.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -112,18 +119,23 @@ export const TodoDetails = forwardRef<DomainViewHandle, {
       {phase === "error" && <p role="alert">{message}</p>}
       <p className="scope-note">当前显示本机保存成果；接续情况见同步状态。</p>
       <div className="todo-full-text" data-testid="todo-full-text">{display.text}</div>
-      <dl><dt>完成状态</dt><dd>{display.status === "completed" ? "已完成" : display.status === "unfinished" ? "未完成" : "无法识别，待核对"}</dd>
-        <dt>截止日期</dt><dd>{display.dueState === "unset" ? "未设置" : display.dueState === "invalid" ? "无法识别" : display.dueDate}</dd></dl>
+      <p className="inspector-status">□　{display.status === "completed" ? "已完成" : display.status === "unfinished" ? "进行中" : "无法识别，待核对"}</p>
+      <div className="inspector-field"><h3>▧　备注</h3><button className="inspector-value inspector-notes" disabled={locked || phase !== "ready"} onClick={() => void beginEditor("notes")}>{display.notes || "添加备注…"}</button></div>
+      <div className="inspector-field"><h3>▦　截止日期</h3><button className="inspector-value" disabled={locked || phase !== "ready"} onClick={() => void beginEditor("date")}><span>{display.dueState === "unset" ? "未设置" : display.dueState === "invalid" ? "无法识别" : display.dueDate}</span><span aria-hidden="true">▦</span></button></div>
+      <div className="inspector-field"><h3>⟳　重复规则</h3><button className="inspector-value" disabled={locked || phase !== "ready"} onClick={() => void beginEditor("repeat")}>{display.repeatFrequency ? ({ day: "每日", week: "每周", month: "每月" } as Record<string,string>)[display.repeatFrequency] : "不重复"}<span>⌄</span></button></div>
+      {display.repeatFrequency && <p>重复进度：{display.repeatCount}/{display.repeatTarget} · {({day:"每日",week:"每周",month:"每月"} as Record<string,string>)[display.repeatFrequency]}刷新</p>}
       {display.dateLabel && <p>{display.dateLabel}</p>}
       {display.warning && <p role="alert">{display.warning}</p>}
       {!editor && !deleting && <div className="todo-actions">
+        <button disabled={locked || phase !== "ready"} onClick={() => void beginEditor("notes")}>编辑备注</button>
+        <button disabled={locked || phase !== "ready"} onClick={() => void beginEditor("repeat")}>设置重复</button>
         <button disabled={locked || phase !== "ready"} onClick={() => void beginEditor("text")}>编辑内容</button>
         <button disabled={locked || phase !== "ready"} onClick={() => void beginEditor("date")}>设置截止日期</button>
-        <button disabled={locked || phase !== "ready" || display.status === "unknown" || (display.status !== "completed" && !canComplete)} title={!canComplete ? "请先完成所有子待办" : undefined} onClick={() => void progress.mutate(record, { kind: "complete", completed: display.status !== "completed" }).then(accept)}>{display.status === "completed" ? "恢复未完成" : "标记完成"}</button>
+        <button disabled={locked || phase !== "ready" || display.status === "unknown" || (display.status !== "completed" && !canComplete)} title={!canComplete ? "请先完成所有子待办" : undefined} onClick={() => void progress.mutate(record, { kind: "complete", completed: display.status !== "completed" }).then(accept)}>{display.status === "completed" ? "恢复未完成" : display.repeatFrequency ? "完成一次" : "标记完成"}</button>
         <button disabled={locked || phase !== "ready"} onClick={() => {setDeleteScope({basis:todoSubtreeBasis(records,record.recordId),count:todoSubtree(records,record.recordId).length-1});setDeleting(record);}}>删除任务</button>
       </div>}
       {editor && <div data-testid="todo-editor">
-        {editor.kind === "text" ? <label>编辑任务内容<textarea aria-label="编辑任务内容" autoFocus value={editor.value} readOnly={locked} onChange={(event) => setEditor({ ...editor, value: event.target.value })} /></label>
+        {editor.kind === "repeat" ? (() => { const config = JSON.parse(editor.value); const update = (patch: object) => setEditor({...editor,value:JSON.stringify({...config,...patch})}); return <><label>刷新周期<select aria-label="刷新周期" disabled={locked} value={config.frequency ?? ""} onChange={e=>update({frequency:e.target.value || null})}><option value="">不重复</option><option value="day">每天零点</option><option value="week">每周一零点</option><option value="month">每月一日零点</option></select></label><label>每周期次数<input aria-label="每周期次数" type="number" min={1} max={1000} step={1} disabled={locked || !config.frequency} value={config.target} onChange={e=>update({target:Number(e.target.value)})}/></label><p>调整重复设置后，本周期进度归零。按 {config.timezone} 时间刷新。</p></>; })() : editor.kind === "notes" ? <label>任务备注<textarea aria-label="任务备注" autoFocus value={editor.value} readOnly={locked} onChange={e=>setEditor({...editor,value:e.target.value})}/></label> : editor.kind === "text" ? <label>编辑任务内容<textarea aria-label="编辑任务内容" autoFocus value={editor.value} readOnly={locked} onChange={(event) => setEditor({ ...editor, value: event.target.value })} /></label>
           : <><label>截止日期选择<input ref={dateField} type="date" aria-label="截止日期选择" autoFocus value={editor.value} disabled={locked} onChange={(event) => setEditor({ ...editor, value: event.target.value })} /></label><button disabled={locked} onClick={() => setEditor({ ...editor, value: "" })}>清除日期</button></>}
         <button disabled={locked} onClick={() => void saveEditor()}>保存修改</button>
         <button disabled={locked} onClick={() => { setEditor(null); setMessage(""); void editorQueue.current.then(() => window.workspaceSetup.domains({ action: "editor-clear", recordId: snapshot.recordId })); }}>取消编辑</button>

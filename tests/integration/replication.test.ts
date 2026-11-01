@@ -47,6 +47,25 @@ async function text(store: SqliteLocalStore, identity: WorkspaceIdentity, conten
   return new ExistingContentService(store).mutate(reference, record.localSequence, (value) => prepareTodoMutation(value, { kind: "text", text: content }, "2026-10-26T01:00:00Z"));
 }
 
+test("repeat progress and notes sync between replicas and concurrent clicks retain divergence", async () => fixture(async (a,b,remote,identity) => {
+  await create(a,identity);
+  const mutate = async (store:SqliteLocalStore,operationId:string,command:Parameters<typeof prepareTodoMutation>[1],at:string) => {
+    const record=(await store.readRecord(scope(identity)))!;
+    const result=await new ExistingContentService(store).mutate({...scope(identity),operationId},record.localSequence,value=>prepareTodoMutation(value,command,at));
+    assert.equal(result.status,"saved-local");
+  };
+  await mutate(a,"repeat-config",{kind:"repeat",frequency:"day",target:6,timezone:"Asia/Shanghai"},"2026-11-01T01:00:00Z");
+  await mutate(a,"repeat-notes",{kind:"notes",notes:"一杯水"},"2026-11-01T01:01:00Z");
+  const ea=new SyncEngine(identity,a,remote,policy),eb=new SyncEngine(identity,b,remote,policy);
+  assert.deepEqual(await ea.run(),[]);assert.deepEqual(await eb.run(),[]);
+  assert.equal((await b.readRecord(scope(identity)))?.payload?.notes,"一杯水");
+  await mutate(a,"click-a",{kind:"complete",completed:true},"2026-11-01T02:00:00Z");
+  await mutate(b,"click-b",{kind:"complete",completed:true},"2026-11-01T02:01:00Z");
+  assert.deepEqual(await ea.run(),[]);await eb.run();
+  assert.equal((await b.listConflicts({workspaceId:identity.workspaceId,domainId:"builtin.todo"})).length,1);
+  assert.equal((await a.readRecord(scope(identity)))?.payload?.repeatCount,1);
+}));
+
 test("N41–N43 integrated capture, review, progression, offline recovery and shared todo identity", async () => fixture(async (a, b, remote, identity) => {
   await create(a, identity);
   const ea = new SyncEngine(identity, a, remote, policy);

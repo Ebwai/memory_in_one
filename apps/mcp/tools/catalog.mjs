@@ -18,6 +18,7 @@ export function catalog(info) {
       const required = ["domainId", "operationId"];
       if (action !== "create") { Object.assign(properties, { recordId: string, revision }); required.push("recordId", "revision"); }
       if (["create", "update"].includes(action)) Object.assign(properties, { text: { ...string, description: "todo-list 任务文字。" }, payload: { type: "object", description: "自定义领域按声明提供的内容。" } });
+      if (action === "update") Object.assign(properties, { notes: { ...string, description: "修改备注；一次 update 仅修改备注、重复设置或文字中的一项。" }, frequency: { type: ["string", "null"], enum: ["day", "week", "month", null], description: "自然日历刷新周期；null 关闭重复。与 target、timezone 一起提供。" }, target: { type: "integer", minimum: 1, maximum: 1000 }, timezone: { ...string, description: "IANA 时区，例如 Asia/Shanghai。" } });
       if (action === "date") { properties.dueDate = { type: ["string", "null"], description: "YYYY-MM-DD；null 明确清除。" }; required.push("dueDate"); }
       add("content_" + action, action === "delete" ? "删除具体内容；先返回待确认对象，由客户端承接用户确认，不能以参数声称已确认。" : "在原领域规则和统一位置上执行 " + action + "，只有 accepted 表示已确认成功。", properties, required);
     } else if (action === "directory") add("domain_directory", "查询授权领域登记、启用状态、服务器程序可用性及业务声明，包含停用和缺程序领域。", {}, [], true);
