@@ -11,6 +11,7 @@ export function DomainManager({ workspaceId, initialManagement = false }: { work
   const [addMode, setAddMode] = useState<"none" | "template" | "extension">("none");
   const [compact, setCompact] = useState(() => localStorage.getItem("workspace.compact." + workspaceId) === "true");
   const [projectName, setProjectName] = useState("");
+  const [template, setTemplate] = useState("project");
   const [projectId, setProjectId] = useState(() => "preset.project." + crypto.randomUUID());
   const [projectOperation, setProjectOperation] = useState(() => crypto.randomUUID());
   const [projectDialog, setProjectDialog] = useState<{ action: "rename-project" | "delete-project"; domainId: string; name: string; operationId: string } | null>(null);
@@ -24,7 +25,7 @@ export function DomainManager({ workspaceId, initialManagement = false }: { work
         setSelected(current => current ? result.domains!.find(d => d.definition.domainId === current.definition.domainId) ?? null : null);
       }
       setProjectDialog(null); setMessage(result.message ?? "");
-      if (action === "create-project") { setProjectName(""); setProjectId("preset.project." + crypto.randomUUID()); setProjectOperation(crypto.randomUUID()); }
+      if (action === "create-project") { setProjectName(""); setProjectId("preset." + template + "." + crypto.randomUUID()); setProjectOperation(crypto.randomUUID()); }
     } catch { setMessage("项目操作结果尚待确认，请保留输入后重试原操作。"); }
     finally { setBusy(false); }
   }
@@ -101,7 +102,7 @@ export function DomainManager({ workspaceId, initialManagement = false }: { work
     </article>)}
     <div className="plugin-add-actions"><h3>已注册插件</h3><details><summary>＋ 新增插件</summary><button onClick={() => setAddMode("template")}>按模板新建插件</button><button onClick={() => setAddMode("extension")}>添加领域扩展／补齐程序</button></details></div>
     <section hidden={addMode !== "template"} aria-label="按模板新建插件"><h3>按模板新建插件</h3>
-      <label>插件模板<select aria-label="插件模板"><option value="project">项目</option></select></label>
+      <label>插件模板<select aria-label="插件模板" value={template} onChange={e => { setTemplate(e.target.value); setProjectId("preset." + e.target.value + "." + crypto.randomUUID()); setProjectOperation(crypto.randomUUID()); }}><option value="project">项目</option><option value="checklist">清单</option></select></label>
       <label>项目名称<input aria-label="项目名称" maxLength={100} value={projectName} disabled={busy} onChange={e => setProjectName(e.target.value)} /></label>
       <button disabled={busy || !projectName.trim()} onClick={() => guard(() => { void projectRequest("create-project", projectId, projectName, projectOperation); })}>创建项目插件</button>
     </section>

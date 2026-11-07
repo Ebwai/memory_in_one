@@ -17,7 +17,8 @@ test("project templates and fixed notes support editing, completion, deletion an
     let page = await launch();
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
-    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await page.getByRole("button",{name:"返回主页",exact:false}).click();
+    await page.getByRole("button", { name: "工作空间", exact: true }).click();
     const notes = () => page.getByTestId("domain-preset.notes");
     await notes().waitFor();
     await page.getByText("＋ 新增插件", { exact: true }).click();
@@ -51,8 +52,8 @@ test("project templates and fixed notes support editing, completion, deletion an
     await page.getByLabel("新项目名称", { exact: true }).fill("装修计划");
     await page.getByRole("button", { name: "保存项目名称", exact: true }).click();
     await page.getByRole("heading", { name: "装修计划", exact: true }).waitFor();
-    await app.close(); app = null; page = await launch();
-    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await app.close(); app = null; page = await launch(); await page.getByRole("button",{name:"返回主页",exact:false}).click();
+    await page.getByRole("button", { name: "工作空间", exact: true }).click();
     await page.getByRole("heading", { name: "装修计划", exact: true }).waitFor();
     await projects().first().getByRole("button", { name: "删除项目", exact: true }).click();
     await page.getByRole("button", { name: "取消项目操作", exact: true }).click();
@@ -62,8 +63,9 @@ test("project templates and fixed notes support editing, completion, deletion an
     await page.waitForFunction(() => document.querySelectorAll('[data-testid^="domain-preset.project."]').length === 1);
     await notes().getByRole("button", { name: "进入领域", exact: true }).click();
     await view().getByText("独立的一点灵感", { exact: true }).waitFor();
-    await view().getByRole("button", { name: "编辑", exact: true }).click();
-    await save("随记内容", "修改后的灵感");
+    await view().locator(".domain-record-content").dblclick();
+    await view().getByLabel("修改内容", {exact:true}).fill("修改后的灵感"); await view().getByLabel("修改内容", {exact:true}).press("Enter");
+    await view().locator(".domain-record-content").getByText("修改后的灵感",{exact:true}).waitFor();
     await view().getByRole("button", { name: "删除", exact: true }).click();
     await view().getByRole("button", { name: "取消删除", exact: true }).click();
     await view().locator("li").getByText("修改后的灵感", { exact: true }).waitFor();

@@ -29,6 +29,7 @@ app.whenReady().then(async () => {
   const service = new LocalContentService(persistence);
   Menu.setApplicationMenu(null);
   window = new BrowserWindow({
+    icon: fileURLToPath(new URL("../assets/workspace.ico", import.meta.url)),
     title: "统一工作空间 · 保存状态", width: 1100, height: 900, minWidth: 640, minHeight: 640,
     show: process.env.WORKSPACE_STATUS_HIDDEN !== "1", backgroundColor: "#f4f5f7",
     webPreferences: { preload: fileURLToPath(new URL("../bridge/preload.cjs", import.meta.url)),

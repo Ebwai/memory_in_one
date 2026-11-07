@@ -7,7 +7,8 @@ export interface DomainViewHandle { dirty: boolean; save(): Promise<boolean>; di
 export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(function DomainView({ domain }, ref) {
   const preset = isPresetDomain(domain.definition.domainId);
   const project = isProjectDomain(domain.definition.domainId);
-  const [kind, setKind] = useState<"idea" | "task">("idea");
+  const checklist = domain.definition.domainId.startsWith("preset.checklist.");
+  const [kind, setKind] = useState<"idea" | "task">(checklist ? "task" : "idea");
   const conflicts = useRef<DomainViewHandle>(null);
   const [conflictedIds, setConflictedIds] = useState<readonly string[]>([]);
   const editorQueue = useRef(Promise.resolve());
@@ -21,6 +22,16 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
   const [uncertain, setUncertain] = useState(false);
   const [message, setMessage] = useState("");
   const [deleting, setDeleting] = useState<{ recordId: string; operationId: string } | null>(null);
+  async function beginRecordEdit(record: LocalRecord) {
+    if (busy || dirty || conflictedIds.includes(record.recordId)) return;
+    setBusy(true);
+    try {
+      const result = await window.workspaceSetup.domains({action:"editor-save",domainId:domain.definition.domainId,recordId:record.recordId,baseSequence:record.localSequence,operationId:crypto.randomUUID(),draft:record.payload ?? {}});
+      if (!result.ok) { setMessage(result.message); return; }
+      setPayload(record.payload ?? {}); setRecordId(record.recordId); setBaseSequence(record.localSequence); setOperationId(crypto.randomUUID()); setDirty(true); setMessage("");
+    } catch { setMessage("暂时无法保护编辑内容，请重试。"); }
+    finally { setBusy(false); }
+  }
   async function load() {
     try {
       const result = await window.workspaceSetup.domains({ action: "read-domain", domainId: domain.definition.domainId });
@@ -65,8 +76,8 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
   useImperativeHandle(ref, () => ({ get dirty() { return dirty || busy || uncertain || !!conflicts.current?.dirty; }, save, discard }));
   return <section className="card" data-testid="domain-view" data-project-task={project && kind === "task"}><h2>{domain.displayName ?? domain.definition.name}</h2>
     <p>当前展示本机成果，接续情况见同步状态。</p>
-    {project && <div role="group" aria-label="项目内容"><button disabled={busy || dirty} aria-pressed={kind === "idea"} onClick={() => setKind("idea")}>项目想法</button><button disabled={busy || dirty} aria-pressed={kind === "task"} onClick={() => setKind("task")}>项目待办</button></div>}
-    <div className={project && kind === "task" ? "project-entry" : undefined}>
+    {project && !checklist && <div role="group" aria-label="项目内容"><button disabled={busy || dirty} aria-pressed={kind === "idea"} onClick={() => setKind("idea")}>项目想法</button><button disabled={busy || dirty} aria-pressed={kind === "task"} onClick={() => setKind("task")}>项目待办</button></div>}
+    <div hidden={baseSequence !== null} className={project && kind === "task" ? "project-entry" : undefined}>
     {preset && <label>{project ? kind === "idea" ? "想法内容" : "待办内容" : "随记内容"}<textarea onKeyDown={e => { if (project && kind === "task" && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); void save(); } }} placeholder={project && kind === "task" ? "记下一件项目待办…" : undefined} aria-label={project ? kind === "idea" ? "想法内容" : "待办内容" : "随记内容"} value={String(payload.text ?? "")} disabled={busy || uncertain || conflictedIds.includes(recordId)} onChange={e => {
       setPayload({ ...payload, text: e.target.value, createdAt: payload.createdAt ?? new Date().toISOString(), ...(project ? { kind, completed: payload.completed ?? false } : {}) });
       setDirty(true); setOperationId(crypto.randomUUID());
@@ -90,7 +101,12 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
     <ul>{records.filter((record) => !record.deleted && (!project || record.payload?.kind === kind)).sort((a, b) => preset ? (project && kind === "task" ? Number(a.payload?.completed === true) - Number(b.payload?.completed === true) : 0) || String(b.payload?.createdAt ?? "").localeCompare(String(a.payload?.createdAt ?? "")) || a.recordId.localeCompare(b.recordId) : 0).map((record, index, visible) => <li key={record.recordId}>
       {project && kind === "task" && (index === 0 || visible[index - 1]?.payload?.completed !== record.payload?.completed) && <h3>{record.payload?.completed ? "已完成区" : "未完成"}</h3>}
       {project && kind === "task" && <span>{record.payload?.completed ? "已完成" : "未完成"} · </span>}
-      <span style={{ whiteSpace: "pre-wrap" }}>{String(record.payload?.[domain.definition.view.titleField] ?? "")}</span>
+      <div className="domain-record-content" tabIndex={0} onDoubleClick={() => void beginRecordEdit(record)} onKeyDown={e => { if (e.key === "Enter" && baseSequence === null) void beginRecordEdit(record); }}>
+      {recordId === record.recordId && baseSequence !== null ? <div onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && !uncertain && !busy) void save(); }} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); void discard(); } if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229 && preset) { e.preventDefault(); void save(); } }}>
+        {preset ? <textarea aria-label="修改内容" autoFocus value={String(payload.text ?? "")} disabled={busy || uncertain} onChange={e => { setPayload({...payload,text:e.target.value}); setOperationId(crypto.randomUUID()); }} /> : domain.definition.view.fields.map(field => <label key={field}>{field}<input aria-label={"修改"+field} value={String(payload[field] ?? "")} disabled={busy || uncertain} onChange={e => { const rule = (domain.definition.schema.properties as JsonObject)[field] as JsonObject; setPayload({...payload,[field]:rule.type === "number" ? Number(e.target.value) : rule.type === "boolean" ? e.target.value === "true" : e.target.value}); setOperationId(crypto.randomUUID()); }}/></label>)}
+        {uncertain && <button onClick={() => void save()}>核对并重试原保存</button>}
+      </div> : String(record.payload?.[domain.definition.view.titleField] ?? "")}
+      </div>
       {project && kind === "task" && <input type="checkbox" aria-label={record.payload?.completed ? "恢复为未完成" : "完成"} checked={record.payload?.completed === true} disabled={busy || dirty || conflictedIds.includes(record.recordId)} onChange={() => {
         setBusy(true);
         void window.workspaceSetup.domains({ action: "save-record", domainId: domain.definition.domainId, recordId: record.recordId, operationId: crypto.randomUUID(), baseSequence: record.localSequence, payload: { ...record.payload, completed: !record.payload?.completed } }).then(result => {
@@ -99,7 +115,7 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
           setMessage(result.save?.status === "saved-local" ? "已保存在本机，待同步。" : result.save?.message ?? "操作结果尚待确认。");
         }).catch(() => setMessage("完成状态尚待确认，请刷新核对后继续。")).finally(() => setBusy(false));
       }} />}
-      <button disabled={busy || dirty || conflictedIds.includes(record.recordId)} onClick={() => { setBusy(true); setPayload(record.payload ?? {}); setRecordId(record.recordId); setBaseSequence(record.localSequence); setOperationId(crypto.randomUUID()); setDirty(true); void window.workspaceSetup.domains({ action: "editor-save", domainId: domain.definition.domainId, recordId: record.recordId, baseSequence: record.localSequence, operationId: crypto.randomUUID(), draft: record.payload ?? {} }).then((result) => { if (!result.ok) { setMessage(result.message); return; } }).catch(() => setMessage("暂时无法保护编辑内容，请重试。")).finally(() => setBusy(false)); }}>编辑</button>
+
       {domain.definition.actions.includes("delete") && <button disabled={busy || dirty || conflictedIds.includes(record.recordId)} onClick={() => setDeleting({ recordId: record.recordId, operationId: crypto.randomUUID() })}>删除</button>}
     </li>)}</ul>
   </section>;

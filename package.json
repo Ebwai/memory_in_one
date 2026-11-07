@@ -1,6 +1,6 @@
 {
   "name": "personal-information-workspace",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
@@ -9,6 +9,12 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "build:android": "node scripts/build-android.mjs",
+    "build:android-debug": "node scripts/build-android.mjs --debug",
+    "typecheck:android": "tsc -p apps/android/tsconfig.json",
+    "test:android": "node --test tests/android-local.test.mjs",
+    "test:android-device": "node tests/android-device.test.mjs",
+    "test:direct-edit-ui": "pnpm build:status-demo && node --test tests/e2e/direct-edit-board.test.mjs",
     "typecheck": "tsc -b --pretty false",
     "test": "pnpm build && node --test --test-concurrency=1 .build/tests/integration/local-persistence.test.js .build/tests/integration/save-status.test.js .build/tests/integration/reliable-save.test.js .build/tests/integration/workspace-initialization.test.js .build/tests/integration/domains.test.js .build/tests/integration/preset-plugins.test.js .build/tests/integration/todo-review.test.js .build/tests/integration/todo-progress.test.js .build/tests/integration/todo-repetition.test.js .build/tests/integration/todo-tree.test.js .build/tests/integration/conflicts.test.js .build/tests/integration/replication.test.js .build/tests/integration/mcp.test.js .build/tests/integration/export-scope.test.js .build/tests/integration/snapshot.test.js .build/tests/integration/archive.test.js .build/tests/integration/recovery.test.js .build/tests/integration/migration.test.js",
     "test:electron": "pnpm build && node scripts/test-electron.mjs",
@@ -49,6 +55,7 @@
     "playwright-core": "1.64.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "resedit": "3.0.2",
     "typescript": "5.9.3"
   }
 }

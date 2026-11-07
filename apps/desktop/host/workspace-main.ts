@@ -139,7 +139,7 @@ app.whenReady().then(async () => {
     } catch { problem = "已保留原空间绑定，但当前无法核对统一位置；未创建替代空间。"; }
   })();
   Menu.setApplicationMenu(null);
-  window = new BrowserWindow({ title: "统一工作空间", width: 1000, height: 820,
+  window = new BrowserWindow({ icon: fileURLToPath(new URL("../assets/workspace.ico", import.meta.url)), title: "统一工作空间", width: 1000, height: 820,
     show: process.env.WORKSPACE_SETUP_HIDDEN !== "1", frame: false, transparent: true, hasShadow: false, backgroundColor: "#00000000",
     webPreferences: { preload: fileURLToPath(new URL("../bridge/workspace-preload.cjs", import.meta.url)),
       nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false,

@@ -16,18 +16,19 @@ test("notes and six segmented completions persist through a real desktop restart
     let page=await app.firstWindow();
     await page.getByRole("button",{name:"创建新工作空间",exact:true}).click();
     await page.getByRole("button",{name:"确认创建",exact:true}).click();
+    await page.getByRole("button",{name:"返回主页",exact:false}).click();
     await page.getByLabel("任务内容",{exact:true}).fill("喝水六杯");
     await page.getByLabel("任务内容",{exact:true}).press("Enter");
     await page.getByRole("button",{name:"喝水六杯",exact:true}).click();
     const details=page.getByTestId("todo-details");
-    await details.getByRole("button",{name:"编辑备注",exact:true}).click();
+    await details.locator(".inspector-notes").dblclick();
     await details.getByLabel("任务备注",{exact:true}).fill("每杯 200ml\n慢慢喝");
-    await details.getByRole("button",{name:"保存修改",exact:true}).click();
+    await details.locator(".inspector-status").click();
     await details.getByText("每杯 200ml\n慢慢喝",{exact:true}).waitFor();
-    await details.getByRole("button",{name:"设置重复",exact:true}).click();
+    await details.locator(".inspector-field").filter({hasText:"重复规则"}).locator(".direct-edit").dblclick();
     await details.getByLabel("刷新周期",{exact:true}).selectOption("day");
     await details.getByLabel("每周期次数",{exact:true}).fill("6");
-    await details.getByRole("button",{name:"保存修改",exact:true}).click();
+    await details.locator(".inspector-status").click();
     await details.getByRole("button",{name:"完成一次",exact:true}).waitFor();
     await details.getByRole("button",{name:"关闭详情",exact:true}).click();
     for(let count=1;count<=6;count++) {
@@ -37,7 +38,7 @@ test("notes and six segmented completions persist through a real desktop restart
       await page.waitForFunction(({count})=>document.querySelector(`[role="progressbar"][aria-valuenow="${count}"]`)!==null,{count});
       assert.equal(await area.getByRole("progressbar",{includeHidden:true}).getAttribute("aria-valuenow"),String(count));
     }
-    await app.close(); app=await launch(); page=await app.firstWindow();
+    await app.close(); app=await launch(); page=await app.firstWindow(); await page.getByRole("button",{name:"返回主页",exact:false}).click();
     await page.getByRole("button",{name:"已完成（1）",exact:true}).click();
     assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"),"6");
     await page.getByRole("button",{name:"喝水六杯",exact:true}).click();

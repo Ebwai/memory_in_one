@@ -44,3 +44,5 @@ Architecture 基线已于 2026-10-25 经用户确认。当前实现 N01–N70，
 
 
 2026-11-01：[管理控制中心与空间目录](../.claude/rules/tdd/management-spaces.md)，承接四个管理页面、多空间选择、同步暂停切换及导出前同步核对。
+
+Android 迁移正在实现，首个可运行本机切片与验证限制见 [Android 开发版](../apps/android/README.md)，保存事务见 [Android 本机空间保存](../.claude/rules/tdd/android-local.md)。此条不表示 Android 已完成 N01–N62 全量验收。

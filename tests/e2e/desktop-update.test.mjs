@@ -130,7 +130,7 @@ test("real desktop update panel checks releases without credentials and keeps un
   const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: directory, WORKSPACE_SETUP_HIDDEN: "1" }; delete env.ELECTRON_RUN_AS_NODE;
   let app;
   try {
-    app = await _electron.launch({ executablePath: resolve(".build/release/workspace-windows-v0.1.0/工作空间.exe"), args: [], env });
+    app = await _electron.launch({ executablePath: resolve(".build/release/workspace-windows-v1.3.0/工作空间.exe"), args: [], env });
     const page = await app.firstWindow();
     await page.getByTestId("app-update").getByText(`当前版本：${DESKTOP_VERSION}`, { exact: true }).waitFor();
     await app.evaluate(() => { globalThis.originalFetchForUpdateTest = globalThis.fetch; globalThis.fetch = async (url, options) => {
@@ -146,6 +146,7 @@ test("real desktop update panel checks releases without credentials and keeps un
     await app.evaluate(() => { globalThis.fetch = globalThis.originalFetchForUpdateTest; delete globalThis.originalFetchForUpdateTest; });
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
+    await page.getByRole("button", { name: "返回主页", exact: false }).click();
     await page.getByLabel("任务内容", { exact: true }).fill("更新前仍未保存的草稿");
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
     await page.getByRole("group", { name: "处理未保存输入" }).waitFor();
@@ -162,10 +163,10 @@ test("one-click update replaces a real portable app, restarts and preserves exis
   const next = join(parent, "download", "next-app");
   const data = join(parent, "data");
   const archive = join(parent, "new.zip");
-  const nextVersion = "1.3.0";
+  const nextVersion = "1.3.1";
   let app, browser, mainSocket, standalone, server;
   try {
-    await cp(resolve(".build/release/workspace-windows-v0.1.0"), root, { recursive: true });
+    await cp(resolve(".build/release/workspace-windows-v1.3.0"), root, { recursive: true });
     await cp(root, next, { recursive: true });
     const packagePath = join(next, "resources/app/package.json");
     const pkg = JSON.parse(await readFile(packagePath, "utf8"));
@@ -201,11 +202,13 @@ test("one-click update replaces a real portable app, restarts and preserves exis
     if (!page) page = await browser.contexts()[0].waitForEvent("page");
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
+    await page.getByRole("button", { name: "返回主页", exact: false }).click();
     await page.getByLabel("任务内容", { exact: true }).fill("一键更新后仍然存在");
     await page.getByRole("button", { name: "添加待办", exact: true }).click();
     await page.getByTestId("captured-todo").getByText("一键更新后仍然存在", { exact: true }).waitFor();
     const originalBinding = await readFile(join(data, "binding.json"), "utf8");
     await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await page.getByRole("navigation", { name: "管理导航" }).getByRole("button", { name: /设置/ }).click();
     const mock = `(() => {
       const candidate = ${JSON.stringify(candidate)}, downloadUrl = ${JSON.stringify(downloadUrl)};
       const realFetch = globalThis.fetch;
@@ -248,6 +251,7 @@ test("one-click update replaces a real portable app, restarts and preserves exis
     await delay(1000);
     app = await _electron.launch({ executablePath: join(root, "工作空间.exe"), args: [], env });
     page = await app.firstWindow();
+    await page.getByRole("button", { name: "返回主页", exact: false }).click();
     await page.getByTestId("captured-todo").getByText("一键更新后仍然存在", { exact: true }).waitFor();
   } finally {
     mainSocket?.close();

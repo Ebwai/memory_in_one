@@ -15,8 +15,8 @@ import { RecoveryPanel } from "./recovery.js";
 import { MigrationPanel } from "./migration.js";
 
 function App() {
-  const [managing, setManaging] = useState(false);
-  const [page, setPage] = useState<"server" | "workspace" | "mcp" | "settings">("workspace");
+  const [managing, setManaging] = useState(true);
+  const [page, setPage] = useState<"server" | "workspace" | "mcp" | "settings">("server");
   const [spaces, setSpaces] = useState<readonly WorkspaceBinding[]>([]);
   const [additional, setAdditional] = useState(false);
   useEffect(() => {
@@ -74,7 +74,7 @@ function App() {
     finally { setBusy(false); }
   }
   return <main data-managing={managing && !!binding} data-management-page={page}>
-    {binding && managing && <nav className="management-nav" aria-label="管理导航"><div className="management-brand"><span className="pixel-mark"/>控制中心</div>{(["server", "workspace", "mcp", "settings"] as const).map((id, index) => <button key={id} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}><span>0{index + 1}</span>{({server:"服务器",workspace:"工作空间",mcp:"MCP",settings:"设置"})[id]}</button>)}<button className="back-workbench" onClick={() => window.dispatchEvent(new Event("workspace:return"))}>← 返回工作台</button></nav>}
+    {binding && managing && <nav className="management-nav" aria-label="管理导航"><div className="management-brand"><span className="pixel-mark"/>控制中心</div>{(["server", "workspace", "mcp", "settings"] as const).map((id, index) => <button key={id} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}><span>0{index + 1}</span>{({server:"服务器",workspace:"工作空间",mcp:"MCP",settings:"设置"})[id]}</button>)}<button className="back-workbench" onClick={() => window.dispatchEvent(new Event("workspace:return"))}>← 返回主页</button></nav>}
     {binding && managing && <header className="management-heading"><div className="eyebrow">WORKSPACE / CONTROL CENTER</div><h1>{({server:"服务器",workspace:"工作空间",mcp:"MCP",settings:"设置"})[page]}</h1><p>{({server:"连接你的服务器，让进度持续接续。",workspace:"每一个空间，都有独立的想法与进度。",mcp:"管理智能体访问权限与调用记录。",settings:"应用偏好与版本更新。"})[page]}</p></header>}
     {binding && managing && page === "workspace" && <section className="space-picker" aria-label="工作空间列表">{(spaces.length ? spaces : [binding]).map(space => <button key={space.workspace.workspaceId} aria-pressed={space.workspace.workspaceId === binding.workspace.workspaceId} disabled={busy} onClick={() => { setBusy(true); void window.workspaceSetup.spaces("switch", space.workspace.workspaceId).then(result => { if (result.binding) { setBinding(result.binding); setConnecting(false); setOpened(false); setAdditional(false); setVerified(null); } }).catch(error => setMessage(error.message)).finally(() => setBusy(false)); }}><span>▦</span><strong>{space.workspace.name}</strong><small>{space.kind === "local" ? "本机电脑" : "服务器"} · {space.workspace.workspaceId === binding.workspace.workspaceId ? "当前空间" : "点击切换"}</small></button>)}<button className="space-add" onClick={() => { setOpened(true); setForm({ creationId: crypto.randomUUID(), name: "新的工作空间", kind: "local", directory: "", url: "" }); }}>＋ 新建空间</button><button className="space-add" onClick={() => { setAdditional(true); setConnecting(true); }}>＋ 接入已有空间</button></section>}
     {binding && managing && page === "server" && <section className="card topology-placeholder"><div className="eyebrow">CONNECTION MAP</div><h2>服务器连接拓扑 <small>待实现</small></h2><p>后续将在这里展示连接服务器的设备及各设备的连接状态。</p><div aria-hidden="true">▱ ┄┄ ▤ ┄┄ ▱</div></section>}

@@ -153,7 +153,7 @@ export async function acknowledgeUpdate(root: string, version: string): Promise<
     if (resolve(plan.root) !== resolve(root) || dirname(resolve(planPath)) !== resolve(plan.stage) || dirname(resolve(plan.stage)) !== dirname(resolve(root))) return null;
     try {
       const result = JSON.parse(await readFile(join(plan.stage, "result.json"), "utf8"));
-      if (result.status === "rolled-back") return "上次更新未能启动，已恢复旧程序；工作空间数据保持原样。";
+      if (result.status === "rolled-back") return "上次更新未能启动，已恢复旧程序；工作空间数据保持原样。原因：" + String(result.message ?? "未知错误") + "。诊断目录：" + plan.stage;
     } catch { /* A new program has no final result until its health acknowledgement. */ }
     if (plan.version === version) { await mkdir(plan.stage, { recursive: true }); await writeFile(join(plan.stage, "healthy"), version, "utf8"); }
   } catch { /* A stale update plan does not prevent normal application startup. */ }

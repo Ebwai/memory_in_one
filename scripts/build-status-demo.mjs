@@ -1,6 +1,7 @@
 import { build } from "esbuild";
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, cp } from "node:fs/promises";
 await mkdir("apps/desktop/dist/renderer", { recursive: true });
+await cp("apps/desktop/assets", "apps/desktop/dist/assets", {recursive:true});
 await Promise.all([
   build({ entryPoints: ["apps/desktop/renderer/main.tsx"], outfile: "apps/desktop/dist/renderer/app.js",
     bundle: true, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' } }),

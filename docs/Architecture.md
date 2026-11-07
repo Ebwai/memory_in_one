@@ -98,3 +98,9 @@ N01 选用适配器内封装的 node:sqlite，已在 Node.js 22.23.0 和 Electro
 - [SQLite 适用场景](https://www.sqlite.org/whentouse.html)与[原子提交](https://www.sqlite.org/atomiccommit.html)：本地事务存储的选型依据。
 - [MCP 传输规范](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)与[官方 TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)：stdio 桥接的依据。引用版本只作设计参考，实际协商及客户端支持须实测。
 
+
+## Android 客户端（2026-11-01，开发中）
+
+用户已确认迁移现版功能并取消手机悬浮窗。新增 `apps/android`，独立拥有 Android 生命周期、手机界面和本机持久化；共享 `packages/todo-list` 的规则。当前开发切片为本机空间和待办，不表示完整平台迁移已交付。Android 不导入其他 apps 的内部模块，也不访问桌面数据库。
+
+子模块及技术设计见 [Android 架构](../.claude/rules/architecture/android.md)。服务器同步、SSH、MCP、插件包及原备份格式的兼容仍需后续实现验收。

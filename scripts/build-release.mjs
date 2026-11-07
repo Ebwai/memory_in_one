@@ -3,10 +3,11 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { build } from "esbuild";
 import { buildServerRelease } from "./build-server-release.mjs";
+import * as ResEdit from "resedit";
 import { DESKTOP_VERSION } from "../apps/desktop/dist/bridge/update-contracts.js";
 
 const require = createRequire(import.meta.url);
-const root = resolve(`.build/release/workspace-windows-v${DESKTOP_VERSION}`);
+const root = resolve(process.env.WORKSPACE_RELEASE_DIRECTORY ?? `.build/release/workspace-windows-v${DESKTOP_VERSION}`);
 const application = join(root, "resources/app");
 await mkdir(application, { recursive: true });
 await writeFile(join(root, "workspace-release.json"), JSON.stringify({ version: DESKTOP_VERSION, platform: "win32", arch: process.arch }, null, 2));
@@ -15,6 +16,15 @@ await mkdir(join(application, "deploy/desktop"), { recursive: true });
 const updateHelper = (await readFile("deploy/desktop/update-helper.ps1", "utf8")).replace(/^\uFEFF/, "");
 await writeFile(join(application, "deploy/desktop/update-helper.ps1"), "\uFEFF" + updateHelper, "utf8");
 await cp(dirname(require("electron")), root, { recursive: true });
+// Patch only the copied distribution binary; preserve the installed Electron runtime.
+const executable = ResEdit.NtExecutable.from(await readFile(join(root, "electron.exe")), {ignoreCert:true});
+const resources = ResEdit.NtExecutableResource.from(executable);
+const icon = ResEdit.Data.IconFile.from(await readFile("apps/desktop/assets/workspace.ico"));
+for (const group of ResEdit.Resource.IconGroupEntry.fromEntries(resources.entries)) {
+  ResEdit.Resource.IconGroupEntry.replaceIconsForResource(resources.entries, group.id, group.lang, icon.icons.map(item => item.data));
+}
+resources.outputResource(executable);
+await writeFile(join(root, "electron.exe"), Buffer.from(executable.generate()));
 await rename(join(root, "electron.exe"), join(root, "工作空间.exe"));
 await writeFile(join(application, "package.json"), JSON.stringify({ name: "personal-information-workspace", productName: "个人信息工作空间", version: DESKTOP_VERSION, type: "module", main: "apps/desktop/dist/host/workspace-main.js" }, null, 2));
 for (const name of ["desktop", "server"]) await cp("apps/" + name + "/dist", join(application, "apps", name, "dist"), { recursive: true });

@@ -101,7 +101,7 @@ try {
   Move-WithRetry $newRoot $root
   $movedNew = $true
   $env:WORKSPACE_UPDATE_PLAN = $PlanPath
-  $newProcess = Start-Process -FilePath (Join-Path $root $plan.executable) -WorkingDirectory $root -WindowStyle Hidden -PassThru
+  $newProcess = Start-Process -FilePath (Join-Path $root $plan.executable) -WorkingDirectory $stage -WindowStyle Hidden -RedirectStandardOutput (Join-Path $stage 'new-app.stdout.log') -RedirectStandardError (Join-Path $stage 'new-app.stderr.log') -PassThru
   $deadline = [DateTime]::UtcNow.AddSeconds($HealthTimeoutSeconds)
   while ([DateTime]::UtcNow -lt $deadline) {
     if (Test-Path -LiteralPath $healthy) { Write-Result 'installed' 'Application started successfully; previous program retained.'; exit 0 }

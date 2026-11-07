@@ -6,6 +6,7 @@ import type { TodoNode } from "@workspace/todo-list";
 import type { DomainResponse } from "../bridge/workspace-contracts.js";
 import { useTodoProgress } from "./use-todo-progress.js";
 import { TodoDetails } from "./todo-details.js";
+import { TodoBoard } from "./todo-board.js";
 import { useLocalDay } from "./use-local-day.js";
 import type { DomainViewHandle } from "./domain-view.js";
 
@@ -23,6 +24,7 @@ export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void; 
   const [unfinishedExpanded, setUnfinishedExpanded] = useState(true);
   useEffect(() => { setExpanded(false); setUnfinishedExpanded(true); }, [compact]);
   useEffect(() => { const typing = (event: KeyboardEvent) => { if (!compact || selected || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return; const target = event.target as HTMLElement; if (target?.closest("input,textarea,select,[contenteditable=true]")) return; if (event.key.length === 1 || event.key === "Process") input.current?.focus(); }; window.addEventListener("keydown", typing, true); return () => window.removeEventListener("keydown", typing, true); });
+  const [board, setBoard] = useState(false);
   const [filter, setFilter] = useState<"all" | "unfinished" | "completed">("all");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [listError, setListError] = useState("");
@@ -168,7 +170,7 @@ export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void; 
     <ConflictPanel ref={conflicts} onPending={setConflictedIds} />
     <section className="todo-review" aria-label="待办列表">
       <nav className="task-tabs" aria-label="待办筛选"><button aria-pressed={filter === "all"} onClick={() => setFilter("all")}>全部 <span>{groups.unfinished.length + groups.completed.length}</span></button><button aria-pressed={filter === "unfinished"} onClick={() => setFilter("unfinished")}>进行中 <span>{groups.unfinished.length}</span></button><button aria-pressed={filter === "completed"} onClick={() => setFilter("completed")}>已完成 <span>{groups.completed.length}</span></button><small>⠿　按手动排序</small></nav>
-      <div className="review-heading"><h2><button aria-label={"未完成 " + (unfinishedExpanded ? "▾" : "▸")} aria-expanded={unfinishedExpanded} onClick={() => setUnfinishedExpanded(v => !v)}><span className="folder-arrow" aria-hidden="true">{unfinishedExpanded ? "▾" : "▸"}</span>未完成 <span className="folder-count">（{groups.unfinished.length}）</span></button></h2><button disabled={busy || loadState === "loading"} onClick={() => void load()}>重新读取列表</button></div>
+      <div className="review-heading"><h2><button aria-label={"未完成 " + (unfinishedExpanded ? "▾" : "▸")} aria-expanded={unfinishedExpanded} onClick={() => setUnfinishedExpanded(v => !v)}><span className="folder-arrow" aria-hidden="true">{unfinishedExpanded ? "▾" : "▸"}</span>未完成 <span className="folder-count">（{groups.unfinished.length}）</span></button></h2><button aria-pressed={board} onClick={() => setBoard(value => !value)}>{board ? "返回列表" : "看板"}</button></div>
       <p className="scope-note">本机任务 · 接续情况见同步状态</p>
       <p role="status" data-testid="todo-list-loading" style={{minHeight:18}}>{loadState === "loading" ? "正在读取待办…" : ""}</p>
       <p role="status" data-testid="todo-progress-notice" style={{minHeight:18}}>{progress.notice}</p>
@@ -179,7 +181,8 @@ export const TodoCapture = forwardRef<DomainViewHandle, { onManagement(): void; 
         onDragOver={event=>{event.preventDefault();setDropHint({id:null,position:"after"});}}
         onDrop={event=>{event.preventDefault();moveTo(null,"after");}}>移到顶层（包含全部子待办）</div>
         <p role="status">{dropHint ? dropHint.id===null ? "释放后移到顶层" : dropHint.position==="inside" ? "释放后成为该事项的子待办" : "释放后调整同级顺序" : "拖向事项或列表间隙"}</p></>
-      <div className="todo-review-list" data-testid="todo-review-scroll">
+      {board && <TodoBoard records={records} today={today} />}
+      <div hidden={board} className="todo-review-list" data-testid="todo-review-scroll">
         <ul className="capture-records" data-testid="unfinished-todos" hidden={filter === "completed" || !unfinishedExpanded}>{visible(groups.unfinished).map(row)}</ul>
         {loadState === "ready" && !groups.unfinished.length && <p>暂无未完成任务</p>}
         <div className="completed-heading"><button className="completed-toggle" aria-label={"已完成（" + groups.completedRoots + "）"} title="数量按顶层目标计算；展开可查看全部子待办" aria-expanded={expanded} aria-controls="completed-todo-list" onClick={() => setExpanded(!expanded)}><span className="folder-arrow" aria-hidden="true">{expanded ? "▾" : "▸"}</span>已完成<span className="folder-count">（{groups.completedRoots}）</span></button></div>

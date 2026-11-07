@@ -21,7 +21,7 @@ paths:
 
 PRD 锚点为待办详情查看。主进程的 todo-detail 固定当前绑定空间和内置领域，从领域存储能力按原任务身份读取；缺失或删除返回明确的不存在结果，错误不伪装为不存在。返回契约位于 desktop/bridge/workspace-contracts.ts。
 
-renderer/todo-details.tsx 以点击时的已确认本机记录作为快照，并请求最新本机读取。加载中说明读取阶段；读取失败保留快照并标明不是最新信息；记录消失时不展示其他任务。详情读取本身只读，展示完整原文、完成状态、明确的未设置日期或日期异常；写入口由推进设计的专用动作承接。没有推断网络已同步。
+renderer/todo-details.tsx 以点击时的已确认本机记录作为快照，并请求最新本机读取。后台读取不插入瞬时加载文案；读取失败保留快照并标明不是最新信息；记录消失时不展示其他任务。详情读取本身只读，展示完整原文、完成状态、明确的未设置日期或日期异常；写入口由推进设计的专用动作承接。没有推断网络已同步。
 
 详情用覆盖层承接，原列表持续挂载且暂时 inert。关闭通过 preventScroll 恢复原入口焦点，保留滚动位置和已完成展开状态；Escape 可关闭，键盘焦点限制在详情内。异步返回先检查当前实例仍有效，不把已关闭详情的结果投到其他任务上。
 
@@ -40,3 +40,14 @@ PRD 锚点为待办主界面回看。groupTodos 根据任务原有创建和完�
 实现锚点：todo-list/src/review.ts、desktop/renderer/use-local-day.ts、todo-capture.tsx、todo-details.tsx、host/domain-features.ts。测试锚点：tests/integration/todo-review.test.ts、tests/e2e/todo-review.test.mjs、tests/e2e/workbench.test.mjs。
 
 验证覆盖日期矩阵、闰年、非法值、未知完成状态、稳定排序、窗口保持打开时跨日、32 条未完成任务滚动、仅剩完成任务、默认折叠及退出重启、长详情、关闭返回位置、任务删除、真实不兼容数据库导致的读取失败及恢复。以操作表数量证明查看与跨日不写入；测试中的旧任务、日期和完成状态是已有数据夹具，不新增本阶段的写操作入口。截图位于 .build/todo-review.png。
+
+## 2026-11-07：直接编辑与完成看板
+
+Architecture 位置仍为桌面 renderer 与 todo-list 投影，无新增事实所有者。PRD 锚点：完成看板、待办内容修改、待办详情查看。
+
+- 详情后台读取静默更新，不反复插入 loading 或成功消息；已有快照保持显示。编辑期间不接受后台版本替换，保存继续使用原 baseSequence、草稿队列和 useTodoProgress 的原操作核对。
+- 字段双击进入原位编辑；焦点离开整个编辑区域时保存，Esc 取消；保存失败保留输入；关闭详情先尝试保存，失败不关闭。跨字段切换先结束当前编辑；开始编辑先取最新本机版本，避免紧接层级变更或同步时使用旧序号。备注/日期/重复编辑复用相同保护。
+- 完成看板从未删除记录派生，只读，不从按根完成状态分组后的列表挑选，以免漏掉未完成父项下的已完成子项。日期按设备本地日历比较，命中集合向上闭包后按树先序呈现；上下文行与完成数量分开。
+- 实现锚点：renderer/todo-details.tsx、domain-view.tsx、todo-capture.tsx、todo-board.tsx。验证锚点：tests/e2e/direct-edit-board.test.mjs。
+
+2026-11-07 验证：`pnpm test` 139 项通过；`pnpm test:direct-edit-ui` 2 项通过；待办推进与重复任务 E2E 各 1 项通过；依赖边界、类型构建及 diff 空白检查通过。独立预览目录的 Windows 程序实际启动、打开看板并校验了 9 种内嵌图标。其他旧界面脚本仍存在导航与隐藏控件的适配失败，不据此宣称完整 E2E 套件全绿。

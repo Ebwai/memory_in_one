@@ -17,7 +17,8 @@ test("N07–N10 extension registration, lifecycle, drafts and independent domain
     const page = await application.firstWindow();
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
-    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await page.getByRole("button",{name:"返回主页",exact:false}).click();
+    await page.getByRole("button", { name: "工作空间", exact: true }).click();
     await page.getByTestId("domain-manager").waitFor();
     const source = readFileSync("extensions/sample-independent-domain/extension.json", "utf8");
     async function register() {
@@ -57,9 +58,9 @@ test("N07–N10 extension registration, lifecycle, drafts and independent domain
     const beforeReview = new DatabaseSync(pending.replicaPath, { readOnly: true });
     const countBeforeReview = beforeReview.prepare("SELECT count(*) AS count FROM pending_operations").get().count;
     beforeReview.close();
-    await view.getByRole("button", { name: "编辑", exact: true }).click();
-    assert.equal(await view.getByLabel("quote", { exact: true }).inputValue(), "保留这段摘录");
-    assert.equal(await view.getByLabel("book", { exact: true }).inputValue(), "独立的书籍字段");
+    await view.locator(".domain-record-content").dblclick();
+    assert.equal(await view.getByLabel("修改quote", { exact: true }).inputValue(), "保留这段摘录");
+    assert.equal(await view.getByLabel("修改book", { exact: true }).inputValue(), "独立的书籍字段");
     assert.equal(await view.getByRole("checkbox").count(), 0);
     assert.equal(await view.getByText(/截止日期|已完成区/).count(), 0);
     const afterReview = new DatabaseSync(pending.replicaPath, { readOnly: true });
@@ -89,6 +90,7 @@ test("N11–N15 floating capture handles IME, paste, repeat intent, real failure
     let page = await application.firstWindow();
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
+    await page.getByRole("button",{name:"返回主页",exact:false}).click();
     await page.getByTestId("todo-capture").waitFor();
     await page.getByRole("button", { name: "悬浮窗口", exact: true }).click();
     const input = page.getByLabel("任务内容", { exact: true });
@@ -153,10 +155,10 @@ test("N11–N15 floating capture handles IME, paste, repeat intent, real failure
     await page.getByRole("button", { name: "添加待办", exact: true }).click();
     await page.getByTestId("captured-todo").getByText("修正后再保存", { exact: true }).waitFor();
     await input.fill("离开前保留");
-    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await page.getByRole("button", { name: "工作空间", exact: true }).click();
     await page.getByRole("button", { name: "取消操作", exact: true }).click();
     assert.equal(await input.inputValue(), "离开前保留");
-    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await page.getByRole("button", { name: "工作空间", exact: true }).click();
     await page.getByRole("button", { name: "放弃输入并继续", exact: true }).click();
     const todo = page.getByTestId("domain-builtin.todo");
     assert.equal(await todo.getByRole("button", { name: "移除本机程序", exact: true }).count(), 0);
@@ -170,7 +172,7 @@ test("N11–N15 floating capture handles IME, paste, repeat intent, real failure
     await page.screenshot({ path: ".build/todo-capture.png", fullPage: true });
     await application.close(); application = undefined;
     application = await launch();
-    page = await application.firstWindow();
+    page = await application.firstWindow(); await page.getByRole("button",{name:"返回主页",exact:false}).click();
     await page.getByTestId("todo-capture").waitFor();
     await page.waitForFunction(() => document.querySelectorAll('[data-testid="captured-todo"]').length === 5);
     assert.equal(await application.evaluate(async ({ BrowserWindow }) => {

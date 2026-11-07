@@ -56,9 +56,33 @@ importers:
       react-dom:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
+      resedit:
+        specifier: 3.0.2
+        version: 3.0.2
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  apps/android:
+    dependencies:
+      '@workspace/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@workspace/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@workspace/extension-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-sdk
+      '@workspace/todo-list':
+        specifier: workspace:*
+        version: link:../../packages/todo-list
+      react:
+        specifier: 19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: 19.3.1
+        version: 19.3.1(react@19.3.1)
 
   apps/desktop:
     dependencies:
@@ -611,6 +635,10 @@ packages:
   path-to-regexp@8.4.2:
     resolution: {integrity: sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA==}
 
+  pe-library@2.0.1:
+    resolution: {integrity: sha512-/qjYFqNSlq59B5DI36am++5/3gMgh02QnzpYigrwrW6s+QpU0mHf09/iA4wjTu21UUxodyV7ZCetV5MiDhaN/A==}
+    engines: {node: '>=20'}
+
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
@@ -652,6 +680,10 @@ packages:
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
+
+  resedit@3.0.2:
+    resolution: {integrity: sha512-FnqVDJYX4etlEnz2AaJYE1c1FTcgrsHiI2U4DXRxO4CIzbGP7r0jml9uZIMlvzCom2pbBLZjIhF26wj92y1cVQ==}
+    engines: {node: '>=20'}
 
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
@@ -1189,6 +1221,8 @@ snapshots:
 
   path-to-regexp@8.4.2: {}
 
+  pe-library@2.0.1: {}
+
   pkce-challenge@5.0.1: {}
 
   playwright-core@1.64.1: {}
@@ -1222,6 +1256,10 @@ snapshots:
   react@19.3.1: {}
 
   require-from-string@2.0.2: {}
+
+  resedit@3.0.2:
+    dependencies:
+      pe-library: 2.0.1
 
   router@2.2.0:
     dependencies:
