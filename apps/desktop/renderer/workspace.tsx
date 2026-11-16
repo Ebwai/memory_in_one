@@ -14,6 +14,30 @@ import { RecoveryPanel } from "./recovery.js";
 
 import { MigrationPanel } from "./migration.js";
 
+function ConnectionTopology({ binding }: { binding: WorkspaceBinding }) {
+  const [devices, setDevices] = useState<Awaited<ReturnType<WorkspaceBridge["topology"]>> | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const result = await window.workspaceSetup.topology();
+        if (active) { setDevices(result); setUnavailable(false); }
+      } catch { if (active) { setDevices(null); setUnavailable(true); } }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 10000);
+    return () => { active = false; clearInterval(timer); };
+  }, [binding.workspace.workspaceId, binding.workspace.authorityId]);
+  return <section className="card">
+    <h2>服务器连接拓扑</h2>
+    <p>{binding.workspace.name} · {binding.location}</p>
+    {unavailable ? <p role="status">暂时无法读取服务器连接状态。</p> : devices === null ? <p role="status">正在查询设备…</p> :
+      devices.length === 0 ? <p>服务器尚未收到设备的同步记录。</p> : <ul>{[...devices].reverse().map(device =>
+        <li key={device.id}>{device.name} · {device.online ? "在线" : "离线"} · 最近同步 {new Date(device.seenAt).toLocaleString()}</li>)}</ul>}
+  </section>;
+}
+
 function App() {
   const [managing, setManaging] = useState(true);
   const [page, setPage] = useState<"server" | "workspace" | "mcp" | "settings">("server");
@@ -77,7 +101,7 @@ function App() {
     {binding && managing && <nav className="management-nav" aria-label="管理导航"><div className="management-brand"><span className="pixel-mark"/>控制中心</div>{(["server", "workspace", "mcp", "settings"] as const).map((id, index) => <button key={id} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}><span>0{index + 1}</span>{({server:"服务器",workspace:"工作空间",mcp:"MCP",settings:"设置"})[id]}</button>)}<button className="back-workbench" onClick={() => window.dispatchEvent(new Event("workspace:return"))}>← 返回主页</button></nav>}
     {binding && managing && <header className="management-heading"><div className="eyebrow">WORKSPACE / CONTROL CENTER</div><h1>{({server:"服务器",workspace:"工作空间",mcp:"MCP",settings:"设置"})[page]}</h1><p>{({server:"连接你的服务器，让进度持续接续。",workspace:"每一个空间，都有独立的想法与进度。",mcp:"管理智能体访问权限与调用记录。",settings:"应用偏好与版本更新。"})[page]}</p></header>}
     {binding && managing && page === "workspace" && <section className="space-picker" aria-label="工作空间列表">{(spaces.length ? spaces : [binding]).map(space => <button key={space.workspace.workspaceId} aria-pressed={space.workspace.workspaceId === binding.workspace.workspaceId} disabled={busy} onClick={() => { setBusy(true); void window.workspaceSetup.spaces("switch", space.workspace.workspaceId).then(result => { if (result.binding) { setBinding(result.binding); setConnecting(false); setOpened(false); setAdditional(false); setVerified(null); } }).catch(error => setMessage(error.message)).finally(() => setBusy(false)); }}><span>▦</span><strong>{space.workspace.name}</strong><small>{space.kind === "local" ? "本机电脑" : "服务器"} · {space.workspace.workspaceId === binding.workspace.workspaceId ? "当前空间" : "点击切换"}</small></button>)}<button className="space-add" onClick={() => { setOpened(true); setForm({ creationId: crypto.randomUUID(), name: "新的工作空间", kind: "local", directory: "", url: "" }); }}>＋ 新建空间</button><button className="space-add" onClick={() => { setAdditional(true); setConnecting(true); }}>＋ 接入已有空间</button></section>}
-    {binding && managing && page === "server" && <section className="card topology-placeholder"><div className="eyebrow">CONNECTION MAP</div><h2>服务器连接拓扑 <small>待实现</small></h2><p>后续将在这里展示连接服务器的设备及各设备的连接状态。</p><div aria-hidden="true">▱ ┄┄ ▤ ┄┄ ▱</div></section>}
+    {binding && managing && page === "server" && <ConnectionTopology key={binding.workspace.workspaceId} binding={binding} />}
     <div className="window-chrome"><span>我的工作空间</span><div><button aria-label="最小化窗口" onClick={() => void window.workspaceSetup.windowAction("minimize")}>−</button><button aria-label="切换工作台与悬浮窗" onClick={() => window.dispatchEvent(new Event("workspace:toggle-mode"))}>▣</button><button aria-label="关闭窗口" onClick={() => void window.workspaceSetup.windowAction("request-close") }>×</button></div></div>
     <header className="page-heading"><div><div className="eyebrow">个人信息统一工作空间</div><h1>让信息有一个归处<span className="pixel-period" aria-hidden="true">.</span></h1><p>想法、计划与行动，在这里接续。</p></div></header>
     {binding && !opened ? <section className="card" data-testid="workspace-created">

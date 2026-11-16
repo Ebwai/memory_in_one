@@ -13,6 +13,7 @@ export async function startWorkspaceServer(options: { directory: string; token: 
   const release = acquireServiceLease(options.directory);
   const authority = new SqliteWorkspaceAuthority(options.directory);
   const service = new WorkspaceInitialization(authority, randomUUID, () => new Date().toISOString());
+  const devices = new Map<string, { name: string; seenAt: number }>();
   const requests = new Set<Promise<void>>();
   const handle = async (request: IncomingMessage, response: ServerResponse) => {
     response.setHeader("content-type", "application/json; charset=utf-8");
@@ -31,7 +32,7 @@ export async function startWorkspaceServer(options: { directory: string; token: 
     try {
       if (request.method === "POST" && request.url === "/v1/sync/capabilities") { request.resume(); reply(200, { atomicProtocol: 1 }); return; }
       if (request.method === "GET" && request.url === "/v1/identity") { reply(200, await authority.inspect()); return; }
-      if (request.method !== "POST" || (!mcp && !["/v1/initialize", "/v1/sync/upload", "/v1/sync/pull"].includes(request.url ?? ""))) { request.resume(); reply(404, { error: "Unavailable endpoint" }); return; }
+      if (request.method !== "POST" || (!mcp && !["/v1/initialize", "/v1/sync/upload", "/v1/sync/pull", "/v1/sync/topology"].includes(request.url ?? ""))) { request.resume(); reply(404, { error: "Unavailable endpoint" }); return; }
       const chunks: Buffer[] = [];
       let length = 0;
       for await (const chunk of request) {
@@ -50,8 +51,29 @@ export async function startWorkspaceServer(options: { directory: string; token: 
         }
         return;
       }
+      if (request.url === "/v1/sync/topology") {
+        const identity = await authority.inspect();
+        const requested = input as { workspaceId?: string; authorityId?: string } | null;
+        if (!identity || requested?.workspaceId !== identity.workspaceId || requested.authorityId !== identity.authorityId) {
+          reply(409, { error: "Workspace identity mismatch" }); return;
+        }
+        const now = Date.now();
+        reply(200, [...devices].map(([id, device]) => ({
+          id, name: device.name, seenAt: new Date(device.seenAt).toISOString(), online: now - device.seenAt < 35000,
+        })));
+        return;
+      }
       if (request.url !== "/v1/initialize") {
-        reply(200, await new WorkspaceSync(options.directory).execute(request.url === "/v1/sync/upload" ? "upload" : "pull", input)); return;
+        const pulling = request.url === "/v1/sync/pull";
+        const result = await new WorkspaceSync(options.directory).execute(pulling ? "pull" : "upload", input);
+        const device = (input as { device?: { id?: unknown; name?: unknown } } | null)?.device;
+        if (pulling && typeof device?.id === "string" && /^[a-f0-9-]{36}$/i.test(device.id) &&
+            typeof device.name === "string" && device.name.trim() && device.name.length <= 120) {
+          if (devices.size >= 512 && !devices.has(device.id)) devices.delete(devices.keys().next().value!);
+          devices.delete(device.id);
+          devices.set(device.id, { name: device.name, seenAt: Date.now() });
+        }
+        reply(200, result); return;
       }
       const result = await service.create(input as Parameters<typeof service.create>[0]);
       reply(result.status === "created" ? 200 : result.status === "rejected" ? 409 : 503, result);

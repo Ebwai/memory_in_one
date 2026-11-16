@@ -53,7 +53,7 @@ export class AuthorityService {
         const rows = await this.store.authorityList(input.workspaceId,input.domainId);
         if ((rows.find(r=>r.recordId===input.recordId)?.revision ?? 0)!==(current?.revision ?? 0)) continue;
         const merged = new Map(rows.map(r=>[r.recordId,r.value])); merged.set(input.recordId,value);
-        try { handler.validateCollection([...merged].map(([recordId,value])=>({recordId,value}))); }
+        try { handler.validateCollection([...merged].map(([recordId,value])=>({recordId,value})), rows); }
         catch(error) {return rejected(error instanceof Error?error.message:"层级结果无效。");}
         result = await this.store.authorityBatch(input,[{...input,value,changed}],rows,handler.guards);
       } else result = await this.store.authorityCommit(input,value,current?.revision ?? 0,changed,handler.guards);
@@ -97,7 +97,7 @@ export class AuthorityService {
       }
       const merged=new Map(rows.map(r=>[r.recordId,r.value]));
       values.forEach(r=>merged.set(r.recordId,r.value));
-      try {handler.validateCollection?.([...merged].map(([recordId,value])=>({recordId,value})));}
+      try {handler.validateCollection?.([...merged].map(([recordId,value])=>({recordId,value})), rows);}
       catch(error) {return {status:"rejected",message:error instanceof Error?error.message:"整体结果无效，原成果保留。"};}
       const result=await this.store.authorityBatch(input,values,rows,handler.guards);
       if(result)return result;

@@ -42,3 +42,7 @@ HTTP 整体上传前检查 atomicProtocol=1 能力；旧服务不接受未经能
 实现锚点：todo-list/src/tree.ts；core/operations/collection-content-service.ts、authority-service.ts；core/replication/engine.ts；adapters/sqlite/replication-database.ts；desktop/renderer/todo-capture.tsx、todo-details.tsx；server/composition/workspace-mcp.ts。
 
 测试锚点：tests/integration/todo-tree.test.ts、tests/e2e/todo-tree.test.mjs。覆盖无环、300 层、完成门禁、祖先恢复、整体删除/取消、竞争范围、同操作重试、失败回滚、HTTP 分组、回执丢失、整体冲突选择及窗口重启。窗口测试通过 Chromium 原生 HTML 拖放事件验收；截图 .build/todo-tree.png，不等同于人工物理鼠标实测。
+
+## 前置关联
+
+`packages/todo-list/src/tree.ts` 使用原有待办集合变更入口检查前置任务和包含父子完成约束的依赖循环。前置关联是独立的同步冲突属性。权威提交在同一集合快照内校验完成状态变化，重开前置任务不会撤销此前已完成的后续任务。删除前置任务后保留原记录标识，用户可在详情中调整关联。

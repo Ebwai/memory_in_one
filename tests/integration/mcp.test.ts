@@ -15,6 +15,39 @@ import { McpAccess } from "@workspace/core";
 import { SqliteLocalStore } from "@workspace/adapters";
 import type { McpCall, UploadRequest } from "@workspace/contracts";
 
+test("full-workspace backup, isolated recovery and migration tools enforce scopes and stable requests", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "workspace-mcp-portability-"));
+  const owner = "p".repeat(40);
+  const server = await startWorkspaceServer({ directory, token: owner });
+  try {
+    await new WorkspaceInitialization(new HttpWorkspaceLocation(server.url, owner), randomUUID, () => "2026-11-08T00:00:00Z").create({ creationId: "portability", name: "自动化备份" });
+    const mcp = { execute: async (_owner: boolean, secret: string, method: string, input: object) => {
+      const response = await fetch(server.url + "/v1/mcp/" + method, { method: "POST", headers: { authorization: "Bearer " + secret, "content-type": "application/json" }, body: JSON.stringify(input) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(JSON.stringify(result));
+      return result;
+    } };
+    const full = await mcp.execute(true, owner, "grant-create", { name: "完整工作空间", domains: ["*"], actions: ["backup", "recovery", "migration"] }) as any;
+    const limited = await mcp.execute(true, owner, "grant-create", { name: "受限", domains: ["*"], actions: ["read"] }) as any;
+    await assert.rejects(mcp.execute(false, limited.credential, "workspace-backup", { operationId: "backup" }));
+    const backup = await mcp.execute(false, full.credential, "workspace-backup", { operationId: "backup" }) as any;
+    assert.equal(backup.status, "accepted");
+    assert.equal(backup.archive.includes(full.credential), false);
+    assert.deepEqual(await mcp.execute(false, full.credential, "workspace-backup", { operationId: "backup" }), backup);
+    await assert.rejects(mcp.execute(false, full.credential, "workspace-restore", { operationId: "backup", archive: backup.archive }));
+    const recovery = await mcp.execute(false, full.credential, "workspace-restore", { operationId: "restore", backupOperationId: "backup" }) as any;
+    assert.equal(recovery.summary.state, "prepared");
+    await assert.rejects(mcp.execute(false, full.credential, "workspace-migration", { operationId: "activate-early", action: "activate", recoveryOperationId: "restore" }));
+    await assert.rejects(mcp.execute(false, full.credential, "workspace-restore", { operationId: "../outside", backupOperationId: "backup" }));
+    assert.equal((await mcp.execute(false, full.credential, "workspace-migration", { operationId: "stop", action: "stop" }) as any).state, "stopped");
+    const stopped = await mcp.execute(false, full.credential, "workspace-backup", { operationId: "stopped-backup" }) as any;
+    await mcp.execute(false, full.credential, "workspace-restore", { operationId: "stopped-restore", archive: stopped.archive });
+    assert.equal((await mcp.execute(false, full.credential, "workspace-migration", { operationId: "activate", action: "activate", recoveryOperationId: "stopped-restore" }) as any).state, "active");
+    assert.deepEqual(await mcp.execute(false, full.credential, "status", { operationId: "backup" }), backup);
+    assert.equal((await mcp.execute(false, full.credential, "workspace-migration", { operationId: "status", action: "status" }) as any).state, "stopped");
+  } finally { await server.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test("N44 call records survive restart, deduplicate and commit atomically with authority facts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "workspace-mcp-"));
   const databasePath = join(directory, "store.sqlite");
@@ -86,6 +119,17 @@ test("N46–N48 real HTTP queries, writes, confirmations and independent domain 
       const response = await fetch(server.url + "/v1/mcp/" + method, { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify(body) });
       return { code: response.status, body: await response.json() as any };
     };
+    const automatic = await query("grant-create", { name: "自动化", domains: ["*"], actions: ["read", "create", "delete", "delete-unattended", "register", "directory"] }, owner);
+    assert.ok(automatic.body.credential);
+    const tools = await query("tools", {}, automatic.body.credential);
+    assert.ok(tools.body.domains.includes("builtin.todo"));
+    const autoCreated = await query("write", { domainId: "builtin.todo", action: "create", text: "自动删除测试", operationId: "auto-create" }, automatic.body.credential);
+    assert.equal(autoCreated.body.status, "accepted");
+    const autoDelete = { domainId: "builtin.todo", recordId: autoCreated.body.version.recordId, revision: autoCreated.body.version.revision, action: "delete", operationId: "auto-delete" };
+    assert.equal((await query("write", autoDelete, automatic.body.credential)).body.status, "accepted");
+    assert.equal((await query("write", autoDelete, automatic.body.credential)).body.status, "accepted");
+    await query("grant-revoke", { id: automatic.body.grant.id }, owner);
+    assert.equal((await query("list", { domainId: "builtin.todo" }, automatic.body.credential)).code, 403);
     const empty = await query("list", { domainId: "builtin.todo" });
     assert.equal(empty.code, 200, JSON.stringify(empty.body)); assert.deepEqual(empty.body.records, []);
     assert.equal(empty.body.source, "authority-confirmed");

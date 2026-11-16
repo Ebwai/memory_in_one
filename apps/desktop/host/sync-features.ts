@@ -72,6 +72,12 @@ export function installSyncFeatures(check: (event: IpcMainInvokeEvent) => void, 
     if (action === "now") return trigger();
     throw new Error("无效同步动作。");
   });
+  ipcMain.handle("workspace:topology", async (event) => {
+    check(event);
+    const current = binding();
+    if (!current) return [];
+    return (await remote()).topology(current.workspace);
+  });
   const tick = () => { void trigger(); };
   const timer = setInterval(tick, 10000); timer.unref();
   powerMonitor.on("resume", tick);

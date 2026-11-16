@@ -27,7 +27,7 @@ flowchart LR
 
 ## API 概览
 
-仅暴露 status/check/download/install 四个动作；renderer 不提供 URL、版本、路径或命令。主进程复用现有 IPC 来源校验。下载来源固定仓库 HTTPS，摘要取 GitHub 发布附件 digest；正式包名包含版本和架构。
+仅暴露 status/check/download/local/install 五个动作；renderer 不提供 URL、版本、路径或命令。主进程复用现有 IPC 来源校验。下载来源固定仓库 HTTPS，摘要取 GitHub 发布附件 digest；正式包名包含版本和架构。
 
 ## 数据模型
 
@@ -48,3 +48,7 @@ idle → checking → available/current/error；available → downloading → re
 错误保留明确阶段；外部安装结果写到同一暂存目录，旧版重新启动后展示回退提示。2026-10-29 更新及相关窗口回归 15/15 通过，包含独立启动的真实便携程序从下载至替换重启并读取原待办的完整链路（发行响应使用隔离夹具）。测试覆盖正式版本数值比较、拒绝错误来源与摘要、下载损坏、真实 Windows 解压和回退、UI 检查及草稿退出保护；使用隔离目录与可控响应，不改实际用户数据。
 
 2026-11-02 本地诊断增强（未推送）：新版进程以暂存目录为工作目录启动，stdout/stderr 写入暂存诊断文件；回退提示携带 result.json 的实际原因及诊断目录。隔离便携版再次通过完整下载、安装、重启、原待办保留与故意启动失败回退检查。未复现用户另一台设备的失败，不能把新增诊断视为已确认其根因。
+
+## 本地包接续（2026-11-07）
+
+local 动作由主进程弹出 ZIP 文件选择器；DesktopUpdater.local 持有互斥直至选择和准备完成，取消不改变状态。本地文件复制到同盘暂存后交给内置助手 Prepare，local 计划从解压包读取正式版本并与 currentVersion 比较，复用平台、架构、应用标识、入口及 ZIP 路径检查；不要求发布方摘要或签名。助手将核验后的目标版本回写计划，host 展示 ready，等用户显式 install 后进入既有草稿关闭及回退链路。此入口不调用在线发现或下载，不接受 renderer 提供路径。

@@ -51,3 +51,7 @@ Architecture 位置仍为桌面 renderer 与 todo-list 投影，无新增事实�
 - 实现锚点：renderer/todo-details.tsx、domain-view.tsx、todo-capture.tsx、todo-board.tsx。验证锚点：tests/e2e/direct-edit-board.test.mjs。
 
 2026-11-07 验证：`pnpm test` 139 项通过；`pnpm test:direct-edit-ui` 2 项通过；待办推进与重复任务 E2E 各 1 项通过；依赖边界、类型构建及 diff 空白检查通过。独立预览目录的 Windows 程序实际启动、打开看板并校验了 9 种内嵌图标。其他旧界面脚本仍存在导航与隐藏控件的适配失败，不据此宣称完整 E2E 套件全绿。
+
+## 待办筛选
+
+`apps/desktop/renderer/todo-capture.tsx` 基于原列表投影匹配完成状态和截止时间，再补齐命中项的祖先路径。旧的日期型截止值按本地到期日末尾分钟比较。筛选期间展开匹配路径，关闭后恢复用户原来的折叠状态。

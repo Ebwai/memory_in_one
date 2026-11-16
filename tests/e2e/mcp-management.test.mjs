@@ -15,9 +15,10 @@ test("N49–N50 desktop creates and revokes scoped grants, displays records and 
     const page = await app.firstWindow();
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
-    await page.getByRole("button", { name: "工作空间管理", exact: true }).click();
+    await page.getByRole("navigation", { name: "管理导航" }).getByRole("button", { name: /工作空间/ }).click();
     await page.getByTestId("workspace-created").waitFor();
     await page.getByRole("button", { name: "立即同步", exact: true }).click();
+    await page.getByRole("navigation", { name: "管理导航" }).getByRole("button", { name: /MCP/ }).click();
     const manager = page.getByTestId("mcp-management");
     await manager.getByRole("button", { name: "打开 MCP 管理", exact: true }).click();
     await manager.getByLabel("接入名称", { exact: true }).fill("桌面测试来源");
@@ -29,6 +30,7 @@ test("N49–N50 desktop creates and revokes scoped grants, displays records and 
     await manager.getByRole("button", { name: "隐藏凭据", exact: true }).click();
     await manager.getByRole("button", { name: "撤销 桌面测试来源", exact: true }).click();
     await manager.getByText(/工作空间所有者 · grant-revoke · 已确认成功/).waitFor();
+    await page.getByRole("navigation", { name: "管理导航" }).getByRole("button", { name: /工作空间/ }).click();
     const panel = page.getByTestId("export-scope");
     await panel.getByRole("button", { name: "选择导出范围", exact: true }).click();
     await panel.getByRole("button", { name: "查看所选来源范围", exact: true }).click();

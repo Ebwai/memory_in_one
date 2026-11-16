@@ -21,7 +21,7 @@ export class McpOperations {
       try {
         const request = await this.prepare(input, audit);
         audit = request.audit!;
-        prepared = await this.store.mcp<McpPrepared>({ method: "prepare", prepared: { key, request, challenge: action === "delete" ? operationId : null, confirmation: action === "delete" ? "pending" : "unneeded" } });
+        prepared = await this.store.mcp<McpPrepared>({ method: "prepare", prepared: { key, request, challenge: action === "delete" && !grant.actions.includes("delete-unattended") ? operationId : null, confirmation: action === "delete" && !grant.actions.includes("delete-unattended") ? "pending" : action === "delete" ? "accepted" : "unneeded" } });
       } catch (error) {
         await this.store.mcp({ method: "call-save", call: { ...audit, status: "failed", result: { message: error instanceof Error ? error.message : "参数无效。" } } });
         throw error;

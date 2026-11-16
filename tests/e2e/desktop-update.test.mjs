@@ -74,6 +74,21 @@ async function powershell(script, env = {}) {
   });
 }
 
+test("local ZIP prepares offline and rejects old versions and mismatched architecture", async () => {
+  const parent = await mkdtemp(join(testRoot, "local-"));
+  for (const [version, arch, accepted] of [["1.2.0", process.arch, true], ["1.1.0", process.arch, false], ["1.0.0", process.arch, false], ["1.2.0", "invalid", false]]) {
+    const f = await fixture(parent, version);
+    const plan = JSON.parse(await readFile(f.planPath, "utf8"));
+    Object.assign(plan, { local: true, currentVersion: "1.1.0", arch });
+    delete plan.version; delete plan.sha256;
+    await writeFile(f.planPath, JSON.stringify(plan));
+    if (accepted) {
+      await runUpdateHelper(f.helper, f.planPath, "Prepare");
+      assert.equal(JSON.parse(await readFile(f.planPath, "utf8")).version, version);
+    } else await assert.rejects(runUpdateHelper(f.helper, f.planPath, "Prepare"));
+  }
+});
+
 async function fixture(parent, version = "1.2.0") {
   const stage = await mkdtemp(join(parent, ".workspace-update-"));
   const input = join(stage, "input", "client");

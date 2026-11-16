@@ -1,0 +1,7 @@
+[
+  {"file":"sqlite.aar","url":"https://jitpack.io/com/github/requery/sqlite-android/3.49.0/sqlite-android-3.49.0.aar","sha256":"2a746d7d9d68f4393d80bbca4e2af07643bc963e22ef737a7fa035d70e07aa70"},
+  {"file":"support-sqlite.aar","url":"https://dl.google.com/dl/android/maven2/androidx/sqlite/sqlite/2.4.0/sqlite-2.4.0.aar","sha256":"bb7fa113112f7e4857496e222e3051d73a910add74bf40761e1bdae55b0216af"},
+  {"file":"androidx-core.aar","url":"https://dl.google.com/dl/android/maven2/androidx/core/core/1.15.0/core-1.15.0.aar","sha256":"432b85a1974076e14b487ece4a28c59a84f1b9efc3fc8be72cd7f05d32055e51"},
+  {"file":"collection.jar","url":"https://dl.google.com/dl/android/maven2/androidx/collection/collection/1.0.0/collection-1.0.0.jar","sha256":"9c8d117b5c2bc120a1cdfeb857e05b495b16c36013570372a708f7827e3ac9f9"},
+  {"file":"kotlin.jar","url":"https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.9.24/kotlin-stdlib-1.9.24.jar","sha256":"858b902696da9cf585ab9d98ffc1c2712269828354dfe9107e3711b084a36468"}
+]

@@ -7,10 +7,11 @@ import { spawn } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { _electron } from "playwright-core";
+import { DESKTOP_VERSION } from "../../apps/desktop/dist/bridge/update-contracts.js";
 
 test("N62 distributed standalone server and bundled MCP entry run independently", { timeout: 60000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), "workspace-server-release-"));
-  const root = resolve(".build/release/workspace-server-v0.1.0");
+  const root = resolve(`.build/release/workspace-server-v${DESKTOP_VERSION}`);
   const token = "release-owner-for-isolated-test-0123456789";
   const server = spawn(process.execPath, [join(root, "apps/server/dist/composition/main.js")], { cwd: root, env: { ...process.env, WORKSPACE_DATA_DIRECTORY: directory, WORKSPACE_BOOTSTRAP_TOKEN: token, WORKSPACE_PORT: "0" }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   let client;
@@ -42,19 +43,21 @@ test("N62 distributed standalone server and bundled MCP entry run independently"
 test("N62 distributed Windows executable starts without source arguments and recovers saved task after restart", { timeout: 60000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), "workspace-release-ui-"));
   const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: directory, WORKSPACE_SETUP_HIDDEN: "1" }; delete env.ELECTRON_RUN_AS_NODE;
-  const executablePath = resolve(".build/release/workspace-windows-v0.1.0/工作空间.exe");
+  const executablePath = resolve(`.build/release/workspace-windows-v${DESKTOP_VERSION}/工作空间.exe`);
   let app;
   try {
     app = await _electron.launch({ executablePath, args: [], env });
     let page = await app.firstWindow();
     await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
     await page.getByRole("button", { name: "确认创建", exact: true }).click();
+    await page.getByRole("navigation", { name: "管理导航" }).getByRole("button", { name: /返回主页/ }).click();
     await page.getByLabel("任务内容", { exact: true }).fill("交付包重启验证");
     await page.getByRole("button", { name: "添加待办", exact: true }).click();
     await page.getByTestId("captured-todo").getByText("交付包重启验证", { exact: true }).waitFor();
     await app.close(); app = undefined;
     app = await _electron.launch({ executablePath, args: [], env });
     page = await app.firstWindow();
+    await page.getByRole("navigation", { name: "管理导航" }).getByRole("button", { name: /返回主页/ }).click();
     await page.getByTestId("captured-todo").getByText("交付包重启验证", { exact: true }).waitFor();
     assert.equal(await page.getByTestId("captured-todo").getByText("交付包重启验证", { exact: true }).count(), 1);
     await page.screenshot({ path: ".build/release.png", fullPage: true });

@@ -7,6 +7,7 @@ import { installSyncFeatures } from "./sync-features.js";
 import { installDomainFeatures, provisionTodo } from "./domain-features.js";
 import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import { hostname } from "node:os";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
@@ -116,6 +117,13 @@ async function localServer(directory: string, token: string): Promise<string> {
   });
 }
 
+// Isolated clients (tests and development) must not share Chromium's encryption
+// profile with the user's normal installation or other concurrent test clients.
+if (process.env.WORKSPACE_CLIENT_DIRECTORY) {
+  const profile = join(process.env.WORKSPACE_CLIENT_DIRECTORY, "electron-profile");
+  mkdirSync(profile, { recursive: true });
+  app.setPath("userData", profile);
+}
 app.whenReady().then(async () => {
   base = process.env.WORKSPACE_CLIENT_DIRECTORY ?? join(app.getPath("userData"), "workspace-initialization");
   mkdirSync(base, { recursive: true });
@@ -132,6 +140,12 @@ app.whenReady().then(async () => {
     try {
       const token = binding.kind === "local" ? existingLocalToken(binding.directory) : await decrypt(binding.secret);
       const endpoint = binding.kind === "local" ? await localServer(binding.directory, token) : binding.endpoint;
+      // On launch the SSH child needs a few seconds to establish forwarding.
+      // Preserve offline startup on failure, but do not mark a healthy saved
+      // binding unreachable while its automatic tunnel is still connecting.
+      if (binding.kind === "remote" && new URL(endpoint).port === "43128" && tunnel!.status().config.enabled) {
+        for (let attempt = 0; attempt < 40 && tunnel!.status().phase === "connecting"; attempt++) await new Promise(done => setTimeout(done, 250));
+      }
       const identity = await new HttpWorkspaceLocation(endpoint, token).inspect();
       if (!identity || identity.workspaceId !== binding.workspace.workspaceId || identity.authorityId !== binding.workspace.authorityId) throw new Error("Identity mismatch");
       binding = { ...binding, endpoint, secret: binding.kind === "remote" ? await encrypt(token) : "" };
@@ -172,7 +186,7 @@ app.whenReady().then(async () => {
     const workspace = original?.workspace ?? (recovery?.done ? recovery.summary.workspace : null);
     if (!workspace) throw new Error("请先接入原空间或完成原空间恢复。");
     const control = async (endpoint: string, token: string, method: string, isolated = false) => {
-      const response = await fetch(endpoint + "/v1/mcp/migration-" + method, { method: "POST", headers: { authorization: "Bearer " + token }, body: JSON.stringify({ isolated }), signal: AbortSignal.timeout(15000) });
+      const response = await fetch(endpoint.replace(/\/+$/, "") + "/v1/mcp/migration-" + method, { method: "POST", headers: { authorization: "Bearer " + token }, body: JSON.stringify({ isolated }), signal: AbortSignal.timeout(15000) });
       const result = await response.json() as { state: string; workspaceId: string; authorityId: string; message?: string };
       if (!response.ok) throw new Error(result.message ?? "迁移状态无法确认。");
       if (result.workspaceId !== workspace.workspaceId || result.authorityId !== workspace.authorityId) throw new Error("迁移空间身份不匹配。");
@@ -268,7 +282,7 @@ app.whenReady().then(async () => {
     } else {
       const token = selected.kind === "local" ? existingLocalToken(selected.directory) : await decrypt(selected.secret);
       const endpoint = selected.kind === "local" ? await localServer(selected.directory, token) : selected.endpoint;
-      const response = await fetch(endpoint + "/v1/mcp/export-snapshot", { method: "POST", headers: { authorization: "Bearer " + token }, body: "{}", signal: AbortSignal.timeout(60000) });
+      const response = await fetch(endpoint.replace(/\/+$/, "") + "/v1/mcp/export-snapshot", { method: "POST", headers: { authorization: "Bearer " + token }, body: "{}", signal: AbortSignal.timeout(60000) });
       if (!response.ok) throw new Error("统一位置快照读取失败，未切换来源。");
       archive = await response.json() as import("@workspace/adapters").WorkspaceArchive;
       if (archive.workspace.workspaceId !== selected.workspace.workspaceId || archive.workspace.authorityId !== selected.workspace.authorityId || archive.snapshot.source !== "authority") throw new Error("来源空间身份不匹配。");
@@ -288,21 +302,49 @@ app.whenReady().then(async () => {
     }
     const token = binding.kind === "local" ? existingLocalToken(binding.directory) : await decrypt(binding.secret);
     const endpoint = binding.kind === "local" ? await localServer(binding.directory, token) : binding.endpoint;
-    const response = await fetch(endpoint + "/v1/mcp/export-scope", { method: "POST", headers: { authorization: "Bearer " + token }, body: "{}", signal: AbortSignal.timeout(15000) });
+    const response = await fetch(endpoint.replace(/\/+$/, "") + "/v1/mcp/export-scope", { method: "POST", headers: { authorization: "Bearer " + token }, body: "{}", signal: AbortSignal.timeout(15000) });
     const result = await response.json() as import("@workspace/contracts").ExportScope;
     if (!response.ok || result.workspace?.workspaceId !== binding.workspace.workspaceId || result.workspace.authorityId !== binding.workspace.authorityId) throw new Error("无法完整读取原统一位置范围，未切换来源。");
     return { ...result, location: binding.location };
   });
   ipcMain.handle("workspace:mcp", async (event, method: unknown, input: unknown) => {
     check(event); await startup;
-    if (!binding || typeof method !== "string" || !["grants", "calls", "directory", "grant-create", "grant-revoke"].includes(method)) throw new Error("管理请求不可用。");
+    if (!binding || typeof method !== "string" || !["configuration", "credentials", "grants", "calls", "directory", "grant-create", "grant-revoke"].includes(method)) throw new Error("管理请求不可用。");
     const token = binding.kind === "local" ? existingLocalToken(binding.directory) : await decrypt(binding.secret);
     const endpoint = binding.kind === "local" ? await localServer(binding.directory, token) : binding.endpoint;
     const identity = await new HttpWorkspaceLocation(endpoint, token).inspect();
     if (identity?.workspaceId !== binding.workspace.workspaceId || identity?.authorityId !== binding.workspace.authorityId) throw new Error("空间身份不匹配。");
-    const response = await fetch(endpoint + "/v1/mcp/" + method, { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify(input ?? {}), signal: AbortSignal.timeout(15000) });
+    const vaultPath = join(base, "mcp-credentials.json");
+    const vault = readJson<Record<string, Record<string, string>>>(vaultPath) ?? {};
+    const vaultKey = binding.workspace.workspaceId + ":" + binding.workspace.authorityId;
+    if (method === "configuration") {
+      const id = (input as { id?: unknown })?.id;
+      if (typeof id !== "string" || !vault[vaultKey]?.[id]) throw new Error("本机未保存此接入凭据。");
+      const grants = await fetch(endpoint.replace(/\/+$/, "") + "/v1/mcp/grants", { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: "{}", signal: AbortSignal.timeout(15000) });
+      if (!grants.ok || !(await grants.json() as { id: string; revoked: boolean }[]).some(g => g.id === id && !g.revoked)) throw new Error("授权已撤销或无法确认。");
+      const credential = await decrypt(vault[vaultKey]![id]!);
+      const literal = (value: string) => JSON.stringify(value);
+      return '[mcp_servers.todo_workspace]\ncommand = ' + literal(process.execPath) +
+        '\nargs = [' + literal(app.isPackaged ? join(app.getAppPath(), "apps/mcp/protocol/main.mjs") : fileURLToPath(new URL("../../../mcp/protocol/main.mjs", import.meta.url))) + ']\n\n[mcp_servers.todo_workspace.env]\nELECTRON_RUN_AS_NODE = "1"\nWORKSPACE_MCP_URL = ' + literal(endpoint) +
+        '\nWORKSPACE_MCP_TOKEN = ' + literal(credential) + '\n';
+    }
+    if (method === "credentials") {
+      const credentials: Record<string, string> = {};
+      for (const [id, encrypted] of Object.entries(vault[vaultKey] ?? {})) credentials[id] = await decrypt(encrypted);
+      return credentials;
+    }
+    const response = await fetch(endpoint.replace(/\/+$/, "") + "/v1/mcp/" + method, { method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" }, body: JSON.stringify(input ?? {}), signal: AbortSignal.timeout(15000) });
     const result = await response.json() as { message?: string };
     if (!response.ok) throw new Error(result.message ?? "管理结果尚不能确认，请刷新核对。");
+    if (method === "grant-create") {
+      const created = result as unknown as { grant: { id: string }; credential: string };
+      try {
+        vault[vaultKey] = { ...vault[vaultKey], [created.grant.id]: await encrypt(created.credential) };
+        atomicJson(vaultPath, vault);
+      } catch {
+        return { ...created, credentialStorageWarning: "授权已创建，但本机加密保存失败。请立即复制凭据；不要重复创建。" };
+      }
+    }
     return result;
   });
   ipcMain.handle("workspace:spaces", async (event, action: unknown, id: unknown) => {
@@ -465,10 +507,14 @@ app.whenReady().then(async () => {
     close: () => window.close() });
   ipcMain.handle("workspace:update", async (event, action: unknown) => {
     check(event);
-    if (!["status", "check", "download", "install"].includes(String(action))) throw new Error("无效更新动作。");
+    if (!["status", "check", "download", "local", "install"].includes(String(action))) throw new Error("无效更新动作。");
     if (!updateAcknowledged) { updateAcknowledged = true; updateNotice = await acknowledgeUpdate(applicationRoot, app.getVersion()); }
     if (action === "check") return updater!.check();
     if (action === "download") return updater!.download();
+    if (action === "local") return updater!.local(async () => {
+      const selected = await dialog.showOpenDialog(window!, { title: "选择本地更新包", properties: ["openFile"], filters: [{ name: "应用更新包", extensions: ["zip"] }] });
+      return selected.canceled ? null : selected.filePaths[0] ?? null;
+    });
     if (action === "install") return updater!.install();
     const state = updater!.status();
     return updateNotice && state.phase === "idle" ? { ...state, message: updateNotice } : state;
@@ -503,7 +549,12 @@ app.whenReady().then(async () => {
       const endpoint = await localServer(binding.directory, token);
       binding = { ...binding, endpoint };
     }
-    return new HttpSyncRemote(binding.endpoint, token);
+    const devicePath = join(base, "sync-device-id");
+    if (!existsSync(devicePath)) {
+      try { writeFileSync(devicePath, randomUUID(), { flag: "wx", mode: 0o600 }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    }
+    return new HttpSyncRemote(binding.endpoint, token, { id: readFileSync(devicePath, "utf8"), name: hostname().slice(0, 120) });
   }, () => base);
   stopSync = sync.stop;
   installDomainFeatures(check, () => binding ? publicBinding(binding) : null, () => base, () => { void sync.trigger(true); });

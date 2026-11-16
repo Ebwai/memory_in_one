@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -77,8 +77,28 @@ test("N49 real external stdio MCP client discovers, writes, confirms deletion an
     const readOnly = await ownerCall("grant-create", { name: "只读", domains: ["builtin.todo"] });
     const reader = await connect(readOnly.credential, false);
     assert.deepEqual((await reader.listTools()).tools.map(t => t.name).sort(), ["call_status", "content_get", "content_list"]);
+    const full = await ownerCall("grant-create", { name: "无人值守", domains: ["*"], actions: ["read", "create", "delete", "delete-unattended", "register", "enable", "directory", "backup", "recovery", "migration"] });
+    const automatic = await connect(full.credential, false);
+    const fullTools = (await automatic.listTools()).tools;
+    for (const name of ["workspace_backup", "workspace_restore", "workspace_migration", "domain_register"]) assert.ok(fullTools.some(t => t.name === name));
+    assert.equal(fullTools.find(t => t.name === "domain_register").inputSchema.properties.domainId.enum, undefined);
+    const definition = JSON.parse(await readFile("extensions/sample-independent-domain/extension.json", "utf8"));
+    definition.domainId = "agent.automatic-reading";
+    const registered = await invoke(automatic, "domain_register", { domainId: definition.domainId, operationId: "register-new", definition });
+    assert.equal(registered.status, "accepted", JSON.stringify(registered));
+    assert.equal((await invoke(automatic, "domain_enable", { domainId: definition.domainId, operationId: "enable-new", revision: registered.version.revision })).status, "accepted");
+    assert.ok((await automatic.listTools()).tools.find(t => t.name === "content_create").inputSchema.properties.domainId.enum.includes(definition.domainId));
+    const note = await invoke(automatic, "content_create", { domainId: definition.domainId, operationId: "create-new", payload: { quote: "自动创建", book: "测试" } });
+    assert.equal(note.status, "accepted", JSON.stringify(note));
+    assert.equal((await invoke(automatic, "content_delete", { domainId: definition.domainId, operationId: "delete-new", recordId: note.version.recordId, revision: note.version.revision })).status, "accepted");
+    const backup = await invoke(automatic, "workspace_backup", { operationId: "backup" });
+    assert.equal(backup.status, "accepted");
+    assert.equal((await invoke(automatic, "workspace_restore", { operationId: "recover", backupOperationId: "backup" })).summary.state, "prepared");
+    assert.equal((await invoke(automatic, "workspace_migration", { operationId: "state", action: "status" })).state, "active");
+    await ownerCall("grant-revoke", { id: full.grant.id });
+    assert.equal((await invoke(automatic, "workspace_backup", { operationId: "after-revoke" })).status, "rejected");
     await ownerCall("grant-revoke", { id: grant.grant.id });
     assert.equal((await invoke(client, "content_create", { ...input, operationId: "after-revoke" })).status, "rejected");
-    assert.equal((await ownerCall("calls")).filter(c => c.action === "delete" && c.status === "succeeded").length, 2);
+    assert.equal((await ownerCall("calls")).filter(c => c.sourceId === grant.grant.id && c.action === "delete" && c.status === "succeeded").length, 2);
   } finally { await Promise.all(clients.map(c => c.close())); await server.close(); await rm(directory, { recursive: true, force: true }); }
 });

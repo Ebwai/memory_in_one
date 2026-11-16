@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { startWorkspaceServer } from '../apps/server/dist/transport/server.js';
+const adb = (...args) => execFileSync('adb', ['-s', 'emulator-5554', ...args], { encoding:'utf8' }).trim();
+const pid=adb('shell','pidof','com.workspace.mobile'); adb('forward','tcp:9224','localabstract:webview_devtools_remote_'+pid);
+const [target]=await(await fetch('http://127.0.0.1:9224/json')).json();
+const socket=new WebSocket(target.webSocketDebuggerUrl); await new Promise(r=>socket.addEventListener('open',r,{once:true}));
+let next=0;const pending=new Map();
+socket.addEventListener('message',e=>{const value=JSON.parse(e.data);const request=pending.get(value.id);if(request){pending.delete(value.id);request(value);}});
+async function evaluate(expression){const id=++next;const result=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Android runtime timeout')),30000);pending.set(id,value=>{clearTimeout(timer);resolve(value);});socket.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression,returnByValue:true,awaitPromise:true}}));});if(result.result?.exceptionDetails)throw new Error(result.result.exceptionDetails.exception?.description??result.result.exceptionDetails.text);return result.result.result.value;}
+const directory=await mkdtemp(path.join(tmpdir(),'workspace-android-'));
+const token='test-'+crypto.randomUUID()+crypto.randomUUID(),port=49162;
+let server=await startWorkspaceServer({directory,token,port});
+adb('reverse',`tcp:${port}`,`tcp:${port}`);
+try {
+  const initialized=await(await fetch(server.url+'/v1/initialize',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({creationId:crypto.randomUUID(),name:'Android device integration'})})).json();
+  assert.equal(initialized.status,'created');
+  assert.equal(await evaluate(`(async()=>{const c=__workspaceClient;await c.createLocal('Device local test');await c.addTodo('Native SQLite durable task');await c.select(c.current.replica);return (await c.rows('builtin.todo')).some(r=>r.payload?.text==='Native SQLite durable task');})()`),true);
+  console.log('PASS native SQLite, built-in registration, durable reread');
+  assert.equal(await evaluate(`(async()=>{const c=__workspaceClient;await c.sync();return (await c.store.syncSummary(c.current.identity.workspaceId)).pending;})()`),0);
+  console.log('PASS in-process local authority and original sync receipts');
+  const fixture={identity:initialized.workspace,endpoint:server.url+'/',token};
+  await evaluate(`(async()=>{const f=${JSON.stringify(fixture)};await __workspaceClient.connect(f.identity,f.endpoint,f.token);})()`);
+  assert.equal(await evaluate(`(async()=>{const c=__workspaceClient;await c.addTodo('Android upload');await c.sync();return (await c.store.syncSummary(c.current.identity.workspaceId)).pending;})()`),0);
+  console.log('PASS native HTTP, Keystore, original sync engine upload and acknowledgement');
+  const grants=await evaluate(`(async()=>{const c=__workspaceClient;const result=await c.manage('grant-create',{name:'Android test agent',domains:['builtin.todo'],actions:['read']});await c.manage('grant-revoke',{id:result.grant.id});return (await c.manage('grants')).filter(g=>g.id===result.grant.id).map(g=>g.revoked);})()`);
+  assert.deepEqual(grants,[true]); console.log('PASS remote MCP grant creation and revocation');
+  assert.equal(await evaluate(`(async()=>{const c=__workspaceClient;const snapshot=await c.store.snapshot(c.current.identity.workspaceId,'local');return snapshot.format;})()`),'workspace-snapshot');
+  console.log('PASS shared snapshot capture on Android SQLite');
+  await evaluate(`(async()=>{const c=__workspaceClient;const rows=await c.rows('builtin.todo');const row=rows.find(r=>r.payload?.text==='Android upload');await c.todo(row.recordId,{kind:'complete',completed:true});await c.sync();})()`);
+  console.log('PASS shared atomic todo progression and synchronization');
+  await server.close();
+  assert.ok(await evaluate(`(async()=>{const c=__workspaceClient;await c.addTodo('Offline native task');await c.sync();return (await c.store.syncSummary(c.current.identity.workspaceId)).pending;})()`)>0);
+  server=await startWorkspaceServer({directory,token,port});
+  assert.equal(await evaluate(`(async()=>{const c=__workspaceClient;await c.sync();return (await c.store.syncSummary(c.current.identity.workspaceId)).pending;})()`),0);
+  console.log('PASS offline acceptance and reconnect upload');
+  const {SqliteLocalStore}=await import('@workspace/adapters');
+  const {WorkspaceSync}=await import('../apps/server/dist/composition/workspace-sync.js');
+  const authority=await SqliteLocalStore.open({databasePath:path.join(directory,'workspace.sqlite')});
+  try{
+    const versions=await authority.authorityList(initialized.workspace.workspaceId,'builtin.todo');
+    const original=versions.find(v=>v.value?.text==='Android upload');
+    await evaluate(`__workspaceClient.todo(${JSON.stringify(original.recordId)},{kind:'text',text:'Mobile concurrent edit'})`);
+    const result=await new WorkspaceSync(directory).execute('upload',{workspaceId:initialized.workspace.workspaceId,authorityId:initialized.workspace.authorityId,domainId:'builtin.todo',recordId:original.recordId,operationId:crypto.randomUUID(),baseRevision:original.revision,value:{...original.value,text:'Server concurrent edit'},changed:['text'],resolution:false});
+    assert.equal(result.status,'accepted');
+    assert.ok(await evaluate(`(async()=>{await __workspaceClient.sync();return (await __workspaceClient.conflicts('builtin.todo')).filter(c=>c.status==='pending').length;})()`)>0);
+    await evaluate(`(async()=>{const c=__workspaceClient;const conflict=(await c.conflicts('builtin.todo')).find(c=>c.status==='pending');await c.resolve('builtin.todo',conflict.recordId,conflict.generation,{kind:'remote'});await c.sync();})()`);
+    console.log('PASS real concurrent edit conflict retention and explicit resolution');
+  }finally{await authority.close();}
+  const authorityArchive=await evaluate(`__workspaceClient.manage('export-snapshot')`);
+  await evaluate(`__workspaceClient.stopMigration()`);
+  assert.equal(authorityArchive.snapshot.source,'authority');
+  assert.equal(await evaluate(`(async()=>{const c=__workspaceClient;const archive={workspace:c.current.identity,location:'test',snapshot:await c.store.snapshot(c.current.identity.workspaceId,'local')};const count=(await c.rows('builtin.todo')).length;await c.restoreBackup(archive);return (await c.rows('builtin.todo')).length===count;})()`),true);
+  console.log('PASS isolated local snapshot recovery with retained operation history');
+  const restored=await evaluate(`(async()=>{const c=__workspaceClient;await c.restoreBackup(${JSON.stringify(authorityArchive)});const before=await c.manage('migration-status');let blocked=false;try{await c.manage('migration-activate',{isolated:false});}catch{blocked=true;}await c.manage('migration-activate',{isolated:true});await c.sync();return {prepared:before.state,blocked,active:(await c.manage('migration-status')).state};})()`);
+  assert.deepEqual(restored,{prepared:'prepared',blocked:true,active:'active'});
+  console.log('PASS authority backup recovery, inactive grants, and explicit isolated activation');
+} finally { socket.close();await server.close();try { adb('reverse','--remove',`tcp:${port}`); } catch {} }

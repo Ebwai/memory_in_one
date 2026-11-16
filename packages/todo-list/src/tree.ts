@@ -9,8 +9,42 @@ import type { TodoDisplay } from "./review.js";
 export interface TodoNode extends TodoDisplay { parentId: string | null; depth: number; childCount: number; descendantCount: number; canComplete: boolean }
 export interface TodoValue { recordId: string; value: ContentValue }
 
-export function validateTodoTree(rows: readonly TodoValue[]): void {
+export function validateTodoTree(rows: readonly TodoValue[], previous?: readonly TodoValue[]): void {
   const values = new Map(rows.filter(r => r.value !== null).map(r => [r.recordId, r.value!]));
+  if (previous) {
+    const before = new Map(previous.map(row => [row.recordId, row.value]));
+    for (const [id, value] of values) {
+      if (typeof value.prerequisiteId !== "string") continue;
+      const original = before.get(id);
+      const required = values.get(value.prerequisiteId);
+      if (original?.prerequisiteId !== value.prerequisiteId && !required) throw new Error("前置任务已不存在。");
+      const advanced = value.completed === true && original?.completed !== true ||
+        Number(value.repeatCount ?? 0) > Number(original?.repeatCount ?? 0);
+      if (advanced && required?.completed !== true) throw new Error("请先完成前置任务。");
+    }
+  }
+  const checked = new Set<string>();
+  const visiting = new Set<string>();
+  const dependencies = new Map<string, string[]>();
+  for (const [id, value] of values) {
+    const required = dependencies.get(id) ?? [];
+    if (typeof value.prerequisiteId === "string" && values.has(value.prerequisiteId)) required.push(value.prerequisiteId);
+    dependencies.set(id, required);
+    if (typeof value.parentId === "string") {
+      const children = dependencies.get(value.parentId) ?? [];
+      children.push(id);
+      dependencies.set(value.parentId, children);
+    }
+  }
+  function visit(id: string): void {
+    if (checked.has(id)) return;
+    if (visiting.has(id)) throw new Error("父子关系或前置关联会形成循环。");
+    visiting.add(id);
+    for (const required of dependencies.get(id) ?? []) visit(required);
+    visiting.delete(id);
+    checked.add(id);
+  }
+  for (const id of values.keys()) visit(id);
   const done = new Set<string>();
   for (const [id, value] of values) {
     if (value.parentId !== undefined && (typeof value.parentId !== "string" || !value.parentId)) throw new Error("父事项身份无效。");
@@ -86,6 +120,11 @@ export function prepareTodoTree(rows: readonly LocalRecord[], id: string, comman
     for (const row of descendants) values.set(row.recordId,null);
   } else {
     if (command.kind === "complete" && command.completed && descendants.some(r => r.recordId !== id && r.payload?.completed !== true)) throw new Error("还有子待办未完成，请先完成所有子待办。");
+    if (command.kind === "prerequisite" && command.recordId !== null && !values.get(command.recordId)) throw new Error("前置任务已不存在。");
+    const prerequisite = source.payload.prerequisiteId;
+    if (command.kind === "complete" && command.completed && typeof prerequisite === "string" && values.get(prerequisite)?.completed !== true) {
+      throw new Error("请先完成前置任务；如果任务已删除，请重新设置前置关联。");
+    }
     const mutation = prepareTodoMutation(source.payload,command,at);
     values.set(id,mutation.kind === "delete" ? null : mutation.payload);
   }

@@ -9,6 +9,7 @@ const api: WorkspaceBridge = {
   exportFile: source => ipcRenderer.invoke("workspace:export-file", source),
   exportScope: source => ipcRenderer.invoke("workspace:export-scope", source),
   mcp: (method, input) => ipcRenderer.invoke("workspace:mcp", method, input),
+  topology: () => ipcRenderer.invoke("workspace:topology"),
   sync: (action) => ipcRenderer.invoke("workspace:sync", action),
   inspect: (form) => ipcRenderer.invoke("workspace:inspect", form),
   connect: (ticket) => ipcRenderer.invoke("workspace:connect", ticket),

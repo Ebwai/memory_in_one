@@ -55,7 +55,7 @@ if ($Mode -eq 'Prepare') {
   $algorithm = [Security.Cryptography.SHA256]::Create()
   try { $checksum = [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
   finally { $stream.Dispose(); $algorithm.Dispose() }
-  if ($checksum -ne $plan.sha256) { throw 'Archive checksum mismatch' }
+  if (-not $plan.local -and $checksum -ne $plan.sha256) { throw 'Archive checksum mismatch' }
   Add-Type -AssemblyName System.IO.Compression.FileSystem
   $zip = [IO.Compression.ZipFile]::OpenRead($plan.archive)
   try {
@@ -74,7 +74,16 @@ if ($Mode -eq 'Prepare') {
     }
   } finally { $zip.Dispose() }
   Expand-Archive -LiteralPath $plan.archive -DestinationPath $extracted
+  if ($plan.local) {
+    $items = @(Get-ChildItem -LiteralPath $extracted -Force)
+    if ($items.Count -ne 1 -or -not $items[0].PSIsContainer) { throw 'Expected one application folder' }
+    $manifest = Get-Content -LiteralPath (Join-Path $items[0].FullName 'workspace-release.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($manifest.version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' -or
+        [version]$manifest.version -le [version]$plan.currentVersion) { throw '更新包版本必须高于当前版本' }
+    $plan | Add-Member -NotePropertyName version -NotePropertyValue $manifest.version -Force
+  }
   $null = Read-NewRoot
+  if ($plan.local) { [IO.File]::WriteAllText($PlanPath, ($plan | ConvertTo-Json -Compress), $utf8) }
   Write-Result 'prepared' 'Application verified; waiting for accepted exit.'
   exit 0
 }

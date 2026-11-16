@@ -19,7 +19,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     const args = request.params.arguments ?? {};
     if (Object.keys(args).some(k => !Object.hasOwn(tool.inputSchema.properties, k)) || tool.inputSchema.required.some(k => !Object.hasOwn(args, k))) throw new Error("工具参数无效或缺少必要依据。");
     const name = request.params.name;
-    const method = name === "call_status" ? "status" : name === "content_list" ? "list" : name === "content_get" ? "get" : name === "domain_directory" ? "directory" : ["domain_install", "domain_remove"].includes(name) ? "program" : "write";
+    const method = name.startsWith("workspace_") ? name.replace("_", "-") : name === "call_status" ? "status" : name === "content_list" ? "list" : name === "content_get" ? "get" : name === "domain_directory" ? "directory" : ["domain_install", "domain_remove"].includes(name) ? "program" : "write";
     const input = method === "write" || method === "program" ? { ...args, action: name.slice(name.indexOf("_") + 1) } : args;
     let result = await remote(method, input);
     if (result.status === "pending-confirmation") {

@@ -1,7 +1,7 @@
 import type { McpCall, McpGrant, McpStorageCommand } from "@workspace/contracts";
 
 export interface McpStore { mcp<T = unknown>(command: McpStorageCommand): Promise<T> }
-export const MCP_ACTIONS = ["read", "create", "update", "date", "complete", "restore", "delete", "directory", "register", "enable", "disable", "install", "remove"] as const;
+export const MCP_ACTIONS = ["backup", "recovery", "migration", "delete-unattended", "read", "create", "update", "date", "complete", "restore", "delete", "directory", "register", "enable", "disable", "install", "remove"] as const;
 
 export class McpAccess {
   constructor(private readonly workspaceId: string, private readonly store: McpStore, private readonly now: () => string) {}
@@ -22,7 +22,7 @@ export class McpAccess {
     if (!grant) throw new Error("接入未授权或已撤销。"); return grant;
   }
   require(grant: McpGrant, domainId: string, action: string): void {
-    if (grant.workspaceId !== this.workspaceId || grant.revoked || !grant.domains.includes(domainId) || !grant.actions.includes(action)) throw new Error("当前授权不允许此领域或动作。");
+    if (grant.workspaceId !== this.workspaceId || grant.revoked || !(grant.domains.includes("*") || grant.domains.includes(domainId)) || !grant.actions.includes(action)) throw new Error("当前授权不允许此领域或动作。");
   }
   private audit(grant: McpGrant, action: string): McpCall {
     return { workspaceId: this.workspaceId, operationId: action + ":" + grant.id, sourceId: "owner", sourceName: "工作空间所有者", domainId: "workspace.access", action, recordId: grant.id, summary: grant.name, time: this.now(), confirmed: true, status: "succeeded", result: { grantId: grant.id } };

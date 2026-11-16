@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { closeSync, createWriteStream, openSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
-import { access, copyFile, mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { access, copyFile, stat, mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -114,6 +114,36 @@ export class DesktopUpdater {
       await this.install();
     } catch (error) { this.plan = null; this.script = null; this.set({ phase: "error", message: error instanceof Error ? error.message : "准备更新失败，旧程序保留。" }); }
     finally { this.working = false; }
+    return this.state;
+  }
+  async local(select: () => Promise<string | null>): Promise<UpdateScreen> {
+    if (this.working || this.state.phase === "ready") return this.state;
+    if (!this.state.canInstall) return this.set({ phase: "error", message: "请使用 Windows 便携应用安装。" });
+    this.working = true;
+    try {
+      const file = await select();
+      if (!file) return this.state;
+      this.offer = null; this.plan = null; this.script = null; this.installRequested = false;
+      this.state = { currentVersion: this.options.version, canInstall: this.state.canInstall, phase: "downloading", progress: 0, message: "正在准备本地更新包…" };
+      await this.protectData();
+      const root = await realpath(this.options.root);
+      const current = JSON.parse(await readFile(join(root, "workspace-release.json"), "utf8"));
+      if (current.version !== this.options.version || current.platform !== "win32" || current.arch !== process.arch) throw new Error("当前应用安装信息不完整。");
+      const info = await stat(file);
+      if (!/\.zip$/i.test(file) || !info.isFile() || info.size <= 0 || info.size > 1024 ** 3) throw new Error("请选择有效的完整 ZIP 更新包（不超过 1 GB）。");
+      const stage = await mkdtemp(join(dirname(root), ".workspace-update-"));
+      this.plan = join(stage, "plan.json"); this.script = join(stage, "update-helper.ps1");
+      await copyFile(join(root, "resources/app/deploy/desktop/update-helper.ps1"), this.script);
+      const archive = join(stage, "update.zip");
+      await copyFile(file, archive);
+      await writeFile(this.plan, JSON.stringify({ root, stage, archive, local: true, currentVersion: this.options.version, arch: process.arch, parentPid: process.pid, executable: "工作空间.exe" }), "utf8");
+      await runUpdateHelper(this.script, this.plan, "Prepare");
+      const prepared = JSON.parse(await readFile(this.plan, "utf8"));
+      this.set({ phase: "ready", version: prepared.version, progress: 100, message: "本地更新包已准备好，点击安装并重启。更新包：" + file });
+    } catch (error) {
+      this.plan = null; this.script = null;
+      this.set({ phase: "error", message: error instanceof Error ? error.message : "本地更新包准备失败，旧程序保留。" });
+    } finally { this.working = false; }
     return this.state;
   }
   async install(): Promise<UpdateScreen> {

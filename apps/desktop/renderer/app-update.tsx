@@ -26,7 +26,8 @@ export function AppUpdate() {
     {screen?.notes && <details><summary>新版说明</summary><p style={{ whiteSpace: "pre-wrap" }}>{screen.notes}</p></details>}
     <button disabled={busy || screen?.phase === "ready"} onClick={() => void action("check")}>检查更新</button>{" "}
     {screen?.canInstall && (screen.phase === "available" || screen.phase === "error" && screen.version) && <button className="primary" disabled={busy} onClick={() => void action("download")}>一键更新</button>}
+    {screen?.canInstall && <button disabled={busy || screen.phase === "ready"} onClick={() => void action("local")}>选择本地更新包</button>}
     {screen?.phase === "ready" && <button className="primary" disabled={busy} onClick={() => void action("install")}>安装并重启</button>}
-    <p className="scope-note">更新来自 Ebwai/memory_in_one 的 GitHub Release。更新后保留原工作空间；服务器需单独更新。</p>
+    <p className="scope-note">支持 GitHub 在线更新或选择本地完整 ZIP 更新包。更新后保留原工作空间；服务器需单独更新。</p>
   </section>;
 }

@@ -27,7 +27,7 @@ assertAllowed(call: McpCall): void {
     const grant = row ? JSON.parse(String(row.grant_json)) as McpGrant : null;
     const host = this.db.prepare("SELECT available FROM mcp_host_programs WHERE workspace_id=? AND domain_id=?").get(call.workspaceId, call.domainId);
     if (host?.available === 0 && ["read", "create", "update", "date", "complete", "restore", "delete", "enable"].includes(call.action)) throw new LocalStoreError("operation-mismatch");
-    if (!grant || grant.revoked || !grant.domains.includes(call.domainId) || !grant.actions.includes(call.action)) throw new LocalStoreError("operation-mismatch");
+    if (!grant || grant.revoked || !(grant.domains.includes("*") || grant.domains.includes(call.domainId)) || !grant.actions.includes(call.action)) throw new LocalStoreError("operation-mismatch");
   }
   private transaction(work: () => unknown): unknown {
     this.db.exec("BEGIN IMMEDIATE");

@@ -1,3 +1,4 @@
+import { WorkspacePortability } from "./workspace-portability.js";
 import { isPresetDomain } from "@workspace/contracts";
 import { currentTodoRows, prepareTodo, prepareTodoMutation, prepareTodoTree, todoSubtreeBasis, TODO_DOMAIN } from "@workspace/todo-list";
 import { parseExtension, validateExtensionRecord } from "@workspace/extension-sdk";
@@ -29,12 +30,16 @@ export class WorkspaceMcp {
         if (method === "export-snapshot") return { workspace: identity, location: "统一位置", snapshot: await store.snapshot(identity.workspaceId, "authority") };
         if (method === "export-scope") return describeExportScope(identity, "authority", "统一位置", await store.exportInventory(identity.workspaceId, "authority"), new Date().toISOString());
         if (method === "grants") return await store.mcp({ method: "grant-list", workspaceId: identity.workspaceId });
-        if (method === "calls") return await store.mcp({ method: "call-list", workspaceId: identity.workspaceId });
+        if (method === "calls") {
+          const calls = await store.mcp<unknown[]>({ method: "call-list", workspaceId: identity.workspaceId });
+          const grants = await store.mcp<McpGrant[]>({ method: "grant-list", workspaceId: identity.workspaceId });
+          return [...calls, ...await new WorkspacePortability(this.directory).history(grants)];
+        }
         if (method === "grant-create") {
           const domains = input.domains;
           if (!Array.isArray(domains) || !domains.every(d => typeof d === "string")) throw new Error("请选择领域。");
           const registrations = await store.authorityList(identity.workspaceId, DOMAIN_REGISTRY);
-          if (domains.some(d => !registrations.some(r => r.recordId === d)) && !(Array.isArray(input.actions) && input.actions.includes("register"))) throw new Error("授权领域尚未登记。");
+          if (domains.some(d => d !== "*" && !registrations.some(r => r.recordId === d)) && !(Array.isArray(input.actions) && input.actions.includes("register"))) throw new Error("授权领域尚未登记。");
           if (input.actions !== undefined && (!Array.isArray(input.actions) || !input.actions.every(a => typeof a === "string"))) throw new Error("授权动作无效。");
           const credential = randomBytes(32).toString("base64url");
           const grant = await access.create(randomUUID(), String(input.name ?? ""), domains as string[], input.actions as string[] | undefined, createHash("sha256").update(credential).digest("hex"));
@@ -45,6 +50,8 @@ export class WorkspaceMcp {
         throw new Error("所有者管理动作不可用。");
       }
       const grant: McpGrant = await access.authenticate(createHash("sha256").update(secret).digest("hex"));
+      const portability = new WorkspacePortability(this.directory);
+      if (["workspace-backup", "workspace-restore", "workspace-migration"].includes(method)) return await portability.execute(grant, identity, method, input, store, () => access.authenticate(createHash("sha256").update(secret).digest("hex")));
       const available = (domainId: string) => {
         if (domainId === DOMAIN_REGISTRY) throw new Error("内部登记不属于内容查询。");
         return new WorkspaceSync(this.directory).handler(store, identity.workspaceId, domainId);
@@ -52,7 +59,7 @@ export class WorkspaceMcp {
       if (method === "directory") {
         if (!grant.actions.includes("directory")) throw new Error("未授予领域管理查询。");
         const records = await store.authorityList(identity.workspaceId, DOMAIN_REGISTRY);
-        return await Promise.all(records.filter(r => !r.value?.removed && grant.domains.includes(r.recordId)).map(async r => ({ ...r, programAvailable: r.recordId === TODO_DOMAIN || isPresetDomain(r.recordId) || await store.mcp<boolean>({ method: "host-get", workspaceId: identity.workspaceId, domainId: r.recordId }), programTarget: "server" })));
+        return await Promise.all(records.filter(r => !r.value?.removed && (grant.domains.includes("*") || grant.domains.includes(r.recordId))).map(async r => ({ ...r, programAvailable: r.recordId === TODO_DOMAIN || isPresetDomain(r.recordId) || await store.mcp<boolean>({ method: "host-get", workspaceId: identity.workspaceId, domainId: r.recordId }), programTarget: "server" })));
       }
       if (method === "program") {
         const domainId = String(input.domainId), action = String(input.action);
@@ -148,11 +155,11 @@ export class WorkspaceMcp {
       if (method === "status") {
         const call = await store.mcp<import("@workspace/contracts").McpCall | null>({ method: "call-read", workspaceId: identity.workspaceId, operationId: String(input.operationId ?? "").startsWith(grant.id + ":") ? String(input.operationId) : grant.id + ":" + String(input.operationId ?? "") });
         if (call && call.sourceId !== grant.id) throw new Error("不能读取其他来源调用。");
-        return call ?? { status: "not-found" };
+        return call ?? await portability.status(grant, input.operationId) ?? { status: "not-found" };
       }
       if (method === "tools") {
         const domains: string[] = [];
-        for (const id of grant.domains) { try { await available(id); domains.push(id); } catch {} }
+        for (const id of (grant.domains.includes("*") ? (await store.authorityList(identity.workspaceId, DOMAIN_REGISTRY)).filter(r => !r.value?.removed).map(r => r.recordId) : grant.domains)) { try { await available(id); domains.push(id); } catch {} }
         const capabilities: Record<string, readonly string[]> = {};
         for (const id of domains) {
           const r = await store.authorityRead({ workspaceId: identity.workspaceId, domainId: DOMAIN_REGISTRY, recordId: id });

@@ -3,7 +3,7 @@ import { HttpWorkspaceLocation, workspaceServiceUrl } from "../workspace/http-lo
 
 export class HttpSyncRemote implements SyncRemote {
   private readonly base: URL;
-  constructor(url: string, private readonly token: string) { this.base = workspaceServiceUrl(url); }
+  constructor(url: string, private readonly token: string, private readonly device?: { id: string; name: string }) { this.base = workspaceServiceUrl(url); }
   inspect(): Promise<WorkspaceIdentity | null> { return new HttpWorkspaceLocation(this.base.href, this.token).inspect(); }
   private async request(path: string, input: unknown): Promise<unknown> {
     const response = await fetch(new URL(path, this.base), { method: "POST", redirect: "error", signal: AbortSignal.timeout(5000),
@@ -26,8 +26,11 @@ export class HttpSyncRemote implements SyncRemote {
     if (result.status === "rejected" && typeof result.message !== "string") throw new Error("拒绝结果不完整，原操作保留。");
     return result;
   }
+  async topology(workspace: WorkspaceIdentity): Promise<{ id: string; name: string; seenAt: string; online: boolean }[]> {
+    return await this.request("v1/sync/topology", workspace) as { id: string; name: string; seenAt: string; online: boolean }[];
+  }
   async pull(workspaceId: string, authorityId: string, cursor: number): Promise<PullPage> {
-    const result = await this.request("v1/sync/pull", { workspaceId, authorityId, cursor, atomicProtocol: 1 }) as PullPage;
+    const result = await this.request("v1/sync/pull", { workspaceId, authorityId, cursor, atomicProtocol: 1, device: this.device }) as PullPage;
     if (!Array.isArray(result?.versions) || !Number.isSafeInteger(result.cursor) || result.cursor < cursor || typeof result.more !== "boolean") throw new Error("进度响应不完整，游标保留。");
     let prior = cursor;
     for (const version of result.versions) {

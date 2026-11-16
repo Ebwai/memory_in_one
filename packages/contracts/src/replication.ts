@@ -63,7 +63,7 @@ export interface DomainHandler {
   readonly policy?: ConflictPolicy;
   validate(value: ContentValue, base: ContentValue, creating: boolean): void;
   readonly guards: readonly AuthorityVersion[];
-  validateCollection?(values: readonly { recordId: string; value: ContentValue }[]): void;
+  validateCollection?(values: readonly { recordId: string; value: ContentValue }[], previous?: readonly { recordId: string; value: ContentValue }[]): void;
 }
 export type ReplicationCommand = { readonly method: "mcp"; readonly command: McpStorageCommand }
   | { readonly method: "local-batch"; readonly changes: readonly import("./local-persistence.js").PreparedChange[]; readonly basis: readonly import("./local-persistence.js").LocalRecord[]; readonly guard?: import("./local-persistence.js").CommitGuard }

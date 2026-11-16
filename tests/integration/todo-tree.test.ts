@@ -221,3 +221,16 @@ test("remote subtree deletion preserves an active child editor and restores the 
   for(const id of ["parent","child","leaf"])assert.equal((await b.readRecord(scope(identity,id)))?.deleted,false);
   assert.equal((await b.readRecord(scope(identity,"leaf")))?.payload?.text,"尚未提交的子目标输入");
 }));
+
+test("prerequisites gate completion without reopening already completed tasks", async () => {
+  await fixture(async (store, _other, _remote, identity) => {
+    await mutate(store, identity, "child", { kind: "prerequisite", recordId: "parent" });
+    const cached = await store.listRecords(scope(identity));
+    assert.throws(() => prepareTodoTree(cached, "child", { kind: "complete", completed: true }, at), /前置/);
+    assert.throws(() => prepareTodoTree(cached, "parent", { kind: "prerequisite", recordId: "child" }, at), /循环/);
+    assert.equal((await mutate(store, identity, "parent", { kind: "complete", completed: true })).status, "saved-local");
+    assert.equal((await mutate(store, identity, "child", { kind: "complete", completed: true })).status, "saved-local");
+    assert.equal((await mutate(store, identity, "parent", { kind: "complete", completed: false })).status, "saved-local");
+    assert.equal((await store.readRecord(scope(identity, "child")))?.payload?.completed, true);
+  });
+});

@@ -6,6 +6,7 @@ import type { RepeatFrequency } from "./repetition.js";
 export type TodoCommand = { readonly kind: "notes"; readonly notes: string }
   | { readonly kind: "repeat"; readonly frequency: RepeatFrequency | null; readonly target: number; readonly timezone: string }
   | { readonly kind: "text"; readonly text: string } | { readonly kind: "date"; readonly dueDate: string | null }
+  | { readonly kind: "prerequisite"; readonly recordId: string | null }
   | { readonly kind: "complete"; readonly completed: boolean }
   | { readonly kind: "move"; readonly targetId: string | null; readonly position: "before" | "inside" | "after" }
   | { readonly kind: "delete"; readonly confirmed: true; readonly subtreeBasis?: string };
@@ -39,6 +40,13 @@ export function prepareTodoMutation(payload: JsonObject, raw: unknown, at: strin
     const next = { ...payload };
     if (command.dueDate === null) delete next.dueDate;
     else next.dueDate = command.dueDate;
+    return { kind: "put", payload: next };
+  }
+  if (command.kind === "prerequisite") {
+    const next = { ...payload };
+    if (command.recordId === null) delete next.prerequisiteId;
+    else if (typeof command.recordId === "string" && command.recordId) next.prerequisiteId = command.recordId;
+    else throw new Error("前置任务身份无效。");
     return { kind: "put", payload: next };
   }
   if (command.kind === "complete") {

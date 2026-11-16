@@ -6,6 +6,11 @@ export function catalog(info) {
   const tools = [];
   const add = (name, description, properties, required, readOnly = false) => tools.push({ name, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: readOnly, destructiveHint: name.endsWith("delete") || name === "domain_remove", idempotentHint: true } });
   add("call_status", "核对当前接入来源的原调用状态；不执行动作。", { operationId: string }, ["operationId"], true);
+  if (info.authorizedDomains.includes("*")) {
+    if (info.grant.actions.includes("backup")) add("workspace_backup", "生成当前统一位置的一致备份，返回 archive 文本及服务器文件路径。保留 operationId 以核对结果。", { operationId: operation }, ["operationId"]);
+    if (info.grant.actions.includes("recovery")) add("workspace_restore", "将当前空间的统一位置备份恢复到服务器独立目录，不覆盖原数据。提供 archive 或同一授权的 backupOperationId，恢复后目标待启用。", { operationId: operation, archive: string, backupOperationId: string }, ["operationId"]);
+    if (info.grant.actions.includes("migration")) add("workspace_migration", "迁移生命周期：status 查询原位置或恢复目标；stop 停写原位置；activate 激活 recoveryOperationId 指定的已恢复目标，要求原位置已停写。之后需将服务数据目录切换到返回 directory 并重新创建授权。", { operationId: operation, action: { type: "string", enum: ["status", "stop", "activate"] }, recoveryOperationId: string }, ["operationId", "action"]);
+  }
   for (const action of info.grant.actions) {
     if (action === "read" && info.domains.length) {
       const domainId = { ...string, enum: info.domains };
@@ -23,7 +28,7 @@ export function catalog(info) {
       add("content_" + action, action === "delete" ? "删除具体内容；先返回待确认对象，由客户端承接用户确认，不能以参数声称已确认。" : "在原领域规则和统一位置上执行 " + action + "，只有 accepted 表示已确认成功。", properties, required);
     } else if (action === "directory") add("domain_directory", "查询授权领域登记、启用状态、服务器程序可用性及业务声明，包含停用和缺程序领域。", {}, [], true);
     else if (["register", "enable", "disable", "install", "remove"].includes(action)) {
-      const properties = { domainId: { ...string, enum: info.authorizedDomains }, operationId: operation };
+      const properties = { domainId: (info.authorizedDomains.includes("*") ? string : { ...string, enum: info.authorizedDomains }), operationId: operation };
       const required = ["domainId", "operationId"];
       if (["enable", "disable"].includes(action)) { properties.revision = revision; required.push("revision"); }
       if (["register", "install"].includes(action)) { properties.definition = { type: "object", description: "完整兼容的声明式领域程序。" }; required.push("definition"); }
