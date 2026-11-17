@@ -415,6 +415,7 @@ main[data-managing=true][data-management-page=server]>.ssh-settings{order:1}
 main[data-managing=true][data-management-page=server]>.binding-recheck,
 main[data-managing=true][data-management-page=server]>[data-testid=workspace-connection]{order:2}
 main[data-managing=true][data-management-page=server]>.topology-placeholder{order:3}
+.floating main>.connection-topology{display:none}
 main[data-managing=true]>.management-nav{z-index:10}
 .space-information-heading h2{font-size:22px;margin-top:8px}
 

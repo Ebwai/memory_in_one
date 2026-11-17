@@ -29,7 +29,7 @@ function ConnectionTopology({ binding }: { binding: WorkspaceBinding }) {
     const timer = setInterval(() => void refresh(), 10000);
     return () => { active = false; clearInterval(timer); };
   }, [binding.workspace.workspaceId, binding.workspace.authorityId]);
-  return <section className="card">
+  return <section className="card connection-topology">
     <h2>服务器连接拓扑</h2>
     <p>{binding.workspace.name} · {binding.location}</p>
     {unavailable ? <p role="status">暂时无法读取服务器连接状态。</p> : devices === null ? <p role="status">正在查询设备…</p> :
@@ -101,7 +101,7 @@ function App() {
     {binding && managing && <nav className="management-nav" aria-label="管理导航"><div className="management-brand"><span className="pixel-mark"/>控制中心</div>{(["server", "workspace", "mcp", "settings"] as const).map((id, index) => <button key={id} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}><span>0{index + 1}</span>{({server:"服务器",workspace:"工作空间",mcp:"MCP",settings:"设置"})[id]}</button>)}<button className="back-workbench" onClick={() => window.dispatchEvent(new Event("workspace:return"))}>← 返回主页</button></nav>}
     {binding && managing && <header className="management-heading"><div className="eyebrow">WORKSPACE / CONTROL CENTER</div><h1>{({server:"服务器",workspace:"工作空间",mcp:"MCP",settings:"设置"})[page]}</h1><p>{({server:"连接你的服务器，让进度持续接续。",workspace:"每一个空间，都有独立的想法与进度。",mcp:"管理智能体访问权限与调用记录。",settings:"应用偏好与版本更新。"})[page]}</p></header>}
     {binding && managing && page === "workspace" && <section className="space-picker" aria-label="工作空间列表">{(spaces.length ? spaces : [binding]).map(space => <button key={space.workspace.workspaceId} aria-pressed={space.workspace.workspaceId === binding.workspace.workspaceId} disabled={busy} onClick={() => { setBusy(true); void window.workspaceSetup.spaces("switch", space.workspace.workspaceId).then(result => { if (result.binding) { setBinding(result.binding); setConnecting(false); setOpened(false); setAdditional(false); setVerified(null); } }).catch(error => setMessage(error.message)).finally(() => setBusy(false)); }}><span>▦</span><strong>{space.workspace.name}</strong><small>{space.kind === "local" ? "本机电脑" : "服务器"} · {space.workspace.workspaceId === binding.workspace.workspaceId ? "当前空间" : "点击切换"}</small></button>)}<button className="space-add" onClick={() => { setOpened(true); setForm({ creationId: crypto.randomUUID(), name: "新的工作空间", kind: "local", directory: "", url: "" }); }}>＋ 新建空间</button><button className="space-add" onClick={() => { setAdditional(true); setConnecting(true); }}>＋ 接入已有空间</button></section>}
-    {binding && managing && page === "server" && <ConnectionTopology key={binding.workspace.workspaceId} binding={binding} />}
+    {binding && managing && page === "server" && <ConnectionTopology key={"topology-" + binding.workspace.workspaceId} binding={binding} />}
     <div className="window-chrome"><span>我的工作空间</span><div><button aria-label="最小化窗口" onClick={() => void window.workspaceSetup.windowAction("minimize")}>−</button><button aria-label="切换工作台与悬浮窗" onClick={() => window.dispatchEvent(new Event("workspace:toggle-mode"))}>▣</button><button aria-label="关闭窗口" onClick={() => void window.workspaceSetup.windowAction("request-close") }>×</button></div></div>
     <header className="page-heading"><div><div className="eyebrow">个人信息统一工作空间</div><h1>让信息有一个归处<span className="pixel-period" aria-hidden="true">.</span></h1><p>想法、计划与行动，在这里接续。</p></div></header>
     {binding && !opened ? <section className="card" data-testid="workspace-created">
@@ -160,7 +160,7 @@ function App() {
     {binding && <><SyncStatus key={"sync-" + binding.workspace.workspaceId}/><DomainManager key={"domains-" + binding.workspace.workspaceId} workspaceId={binding.workspace.workspaceId} initialManagement={managing} /><McpManager key={"mcp-" + binding.workspace.workspaceId} /><ExportScopePanel key={"export-" + binding.workspace.workspaceId} /></>}
     <SshSettings />
     <AppUpdate />
-    <RecoveryPanel key={binding?.workspace.workspaceId} onBinding={setBinding} />
+    <RecoveryPanel key={binding ? "recovery-" + binding.workspace.workspaceId : "recovery"} onBinding={setBinding} />
     <MigrationPanel onBinding={setBinding} />
     <footer className="page-footer">空间身份独立于名称 · 原数据不会被创建动作覆盖</footer>
   </main>;

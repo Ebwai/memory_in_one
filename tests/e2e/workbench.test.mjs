@@ -74,6 +74,28 @@ test("N07–N10 extension registration, lifecycle, drafts and independent domain
   }
 });
 
+test("server topology stays out of the floating workbench", { timeout: 30000 }, async () => {
+  const directory = mkdtempSync(join(tmpdir(), "workspace-workbench-"));
+  const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: directory, WORKSPACE_SETUP_HIDDEN: "1" };
+  delete env.ELECTRON_RUN_AS_NODE;
+  let application;
+  try {
+    application = await _electron.launch({ executablePath: require("electron"), args: ["apps/desktop/dist/host/workspace-main.js"], env });
+    const page = await application.firstWindow();
+    await page.getByRole("button", { name: "创建新工作空间", exact: true }).click();
+    await page.getByRole("button", { name: "确认创建", exact: true }).click();
+    const topology = page.getByRole("heading", { name: "服务器连接拓扑", exact: true });
+    await topology.waitFor();
+    await page.getByRole("button", { name: /返回主页/ }).click();
+    await page.getByRole("button", { name: "悬浮窗口", exact: true }).click();
+    await page.locator("body.floating").waitFor();
+    await topology.waitFor({ state: "detached" });
+  } finally {
+    if (application) await application.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("N11–N15 floating capture handles IME, paste, repeat intent, real failure and restart", { timeout: 90000 }, async () => {
   const directory = mkdtempSync(join(tmpdir(), "workspace-workbench-"));
   const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: directory, WORKSPACE_SETUP_HIDDEN: "1" };

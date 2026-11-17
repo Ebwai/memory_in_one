@@ -1,5 +1,5 @@
 // Single source for the desktop binary, manifest and update comparison.
-export const DESKTOP_VERSION = "1.3.2";
+export const DESKTOP_VERSION = "1.3.3";
 export interface UpdateScreen {
   readonly currentVersion: string;
   readonly phase: "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error";

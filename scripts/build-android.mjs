@@ -35,7 +35,7 @@ await build({ entryPoints: ['apps/android/web/client-ui.tsx'], outfile: path.joi
 await Promise.all(['index.html', 'app.css'].map(file => copyFile(path.join(root, 'apps/android/web', file), path.join(assets, file))));
 const manifest = path.join(out,'AndroidManifest.xml');
 const manifestText = await(await import('node:fs/promises')).readFile('apps/android/AndroidManifest.xml','utf8');
-await(await import('node:fs/promises')).writeFile(manifest,debug?manifestText:manifestText.replace('android:debuggable="true"','android:debuggable="false"').replace('1.3.2-dev','1.3.2').replace(' · 开发版',''));
+await(await import('node:fs/promises')).writeFile(manifest,debug?manifestText:manifestText.replace('android:debuggable="true"','android:debuggable="false"').replace('1.3.3-dev','1.3.3').replace(' · 开发版',''));
 run(path.join(bt, 'aapt.exe'), ['package', '-f', '-M', manifest, '-I', android, '-S', 'apps/android/res', '-A', assets, '-F', path.join(out, 'resources.apk')]);
 run(path.join(java, 'bin/javac.exe'), ['-encoding', 'UTF-8', '-source', '8', '-target', '8', '-classpath', [android,...libraries].join(path.delimiter), '-d', path.join(out, 'classes'), 'apps/android/native/com/workspace/mobile/MainActivity.java', 'apps/android/native/com/workspace/mobile/Platform.java', 'apps/android/native/com/workspace/mobile/SshTunnel.java','apps/android/native/com/workspace/mobile/Updater.java','apps/android/native/com/workspace/mobile/UpdateProvider.java']);
 async function files(dir) { const result = []; for (const name of await readdir(dir)) { const file = path.join(dir, name); if ((await stat(file)).isDirectory()) result.push(...await files(file)); else if (file.endsWith('.class')) result.push(file); } return result; }
