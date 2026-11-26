@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { canonical } from '@workspace/contracts';
+import { canonical, NOTES_DOMAIN } from '@workspace/contracts';
 import { TODO_DOMAIN, type TodoCommand } from '@workspace/todo-list';
 import type { DomainEntry, JsonObject, LocalRecord } from '@workspace/contracts';
-const labels:Record<string,string>={text:'内容',notes:'备注',dueDate:'截止日期',repeatFrequency:'重复规则',repeatTarget:'每周期完成次数',kind:'条目类型',completed:'已完成'};
+const labels:Record<string,string>={title:'标题（选填）',text:'内容',notes:'备注',dueDate:'截止日期',repeatFrequency:'重复规则',repeatTarget:'每周期完成次数',kind:'条目类型',completed:'已完成'};
 export type TodoMove = Extract<TodoCommand, { kind: 'move' }>;
 export function RecordEditor({row,original,entry,busy,message,save,discard,protect,tools,todoRows}:{
   row: LocalRecord; original: JsonObject; entry: DomainEntry; busy: boolean; message: string;
@@ -52,6 +52,8 @@ export function RecordEditor({row,original,entry,busy,message,save,discard,prote
   }
   useEffect(() => {
     function close() {
+      const picker = card.current?.querySelector<HTMLDialogElement>("dialog[open]");
+      if (picker) { picker.close(); picker.closest("details")?.removeAttribute("open"); return; }
       if (disabled || active.current) return;
       if (confirmClose) setConfirmClose(false);
       else if (dirty) setConfirmClose(true);
@@ -62,7 +64,7 @@ export function RecordEditor({row,original,entry,busy,message,save,discard,prote
   });
   const todo=row.domainId===TODO_DOMAIN;
   const properties=entry.definition.schema.properties as Record<string,any>;
-  const keys=todo?['text','notes','dueDate','repeatFrequency','repeatTarget']:Object.keys(properties).filter(k=>!row.domainId.startsWith('preset.')||!['createdAt','completedAt'].includes(k));
+  const keys=row.domainId === NOTES_DOMAIN ? ['title','text'] : todo?['text','notes','dueDate','repeatFrequency','repeatTarget']:Object.keys(properties).filter(k=>!row.domainId.startsWith('preset.')||!['createdAt','completedAt'].includes(k));
   return createPortal(<div className="modal record-overlay">
     <section ref={card} tabIndex={-1} className="record-card" role="dialog" aria-modal="true" aria-label="编辑详情" aria-hidden={confirmClose || undefined} inert={confirmClose || undefined}>
       <div className="record-toolbar"><h2>编辑详情</h2>
@@ -71,17 +73,25 @@ export function RecordEditor({row,original,entry,busy,message,save,discard,prote
       </div>
       {message && <p role="status" className="status">{message}</p>}
       {keys.map(key=>{
-    const property=properties[key]??{},label=labels[key]??key;
+    const property=properties[key]??{},label=row.domainId === NOTES_DOMAIN && key === 'text' ? '正文（必填）' : labels[key]??key;
+    if (key === 'title') return <label key={key}>{label}<input value={String(value[key] ?? '')} disabled={disabled} onChange={event => change({...value,title:event.target.value})} /></label>;
     if(key==='repeatFrequency')return <label key={key}>{label}<select value={String(value[key]??'')} disabled={disabled} onChange={e=>change({...value,[key]:e.target.value})}><option value="">不重复</option><option value="day">每天</option><option value="week">每周</option><option value="month">每月</option></select></label>;
     if(key==='repeatTarget'&&!value.repeatFrequency)return null;
     if(property.enum)return <label key={key}>{label}<select value={String(value[key]??property.enum[0])} disabled={disabled} onChange={e=>change({...value,[key]:property.enum.find((item:unknown)=>String(item)===e.target.value)})}>{property.enum.map((option:string)=><option key={option} value={option}>{option==='task'?'待办':option==='idea'?'想法':option}</option>)}</select></label>;
     if(property.type==='boolean')return <label key={key}>{label}<input type="checkbox" checked={value[key]===true} disabled={disabled} onChange={e=>change({...value,[key]:e.target.checked})}/></label>;
     if(property.type==='number'||key==='repeatTarget')return <label key={key}>{label}<input type="number" value={Number(value[key]??1)} disabled={disabled} onChange={e=>change({...value,[key]:Number(e.target.value)})}/></label>;
     if(key==='dueDate')return <label key={key}>{label}<input type="date" value={String(value[key]??'')} disabled={disabled} onChange={e=>change({...value,[key]:e.target.value})}/></label>;
-    return <label key={key}>{label}<textarea value={String(value[key]??'')} disabled={disabled} onChange={e=>change({...value,[key]:e.target.value})}/></label>;
+    return <label key={key}>{label}<textarea required={row.domainId === NOTES_DOMAIN && key === "text"} value={String(value[key]??'')} disabled={disabled} onChange={e=>change({...value,[key]:e.target.value})}/></label>;
       })}
       {todoRows && <>
-        <label>前置关联<select value={String(value.prerequisiteId ?? '')} disabled={disabled} onChange={event => {
+        <details className="prerequisite-picker" onToggle={event => {
+          const details = event.currentTarget;
+          const dialog = details.querySelector("dialog");
+          if (details.open && dialog && !dialog.open) dialog.showModal();
+          else if (!details.open && dialog?.open) dialog.close();
+        }}><summary>前置关联 · {String(todoRows.find(candidate => candidate.recordId === value.prerequisiteId)?.payload?.text ?? '无')}</summary>
+          <dialog className="prerequisite-options" onCancel={event => { event.currentTarget.closest("details")?.removeAttribute("open"); }}><button type="button" onClick={event => { event.currentTarget.closest("dialog")?.close(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>关闭</button>
+            <label>选择任务<select size={6} value={String(value.prerequisiteId ?? '')} disabled={disabled} onChange={event => {
           const next = { ...value };
           if (event.target.value) next.prerequisiteId = event.target.value;
           else delete next.prerequisiteId;
@@ -92,7 +102,7 @@ export function RecordEditor({row,original,entry,busy,message,save,discard,prote
             <option value={value.prerequisiteId}>前置任务已删除</option>}
           {todoRows.filter(candidate => candidate.recordId !== row.recordId).map(candidate =>
             <option key={candidate.recordId} value={candidate.recordId}>{String(candidate.payload?.text ?? candidate.recordId)}</option>)}
-        </select></label>
+        </select></label></dialog></details>
         <details>
           <summary>调整层级与顺序</summary>
           <label>目标任务<select disabled={disabled} value={move ? move.targetId ?? '' : 'unchanged'} onChange={event => {

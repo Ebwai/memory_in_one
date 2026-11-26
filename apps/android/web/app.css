@@ -19,3 +19,22 @@ header{padding:10px 0}
 .todo-filter-controls input,.todo-deadline-enabled input{width:20px;min-height:20px;margin:0}
 .todo-filter-fields{min-width:0;margin:0 0 12px}
 .todo-filter-fields input[type=datetime-local]{min-width:0}
+
+*{box-sizing:border-box}
+.prerequisite-picker{position:relative;min-width:0;max-width:100%}
+.prerequisite-picker summary{overflow-wrap:anywhere;cursor:pointer}
+.prerequisite-options{margin:0;position:fixed;z-index:100;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 32px));max-height:70dvh;overflow:auto;background:#fff;color:#222;border:2px solid #444;padding:16px;box-shadow:0 10px 40px #0004}
+.prerequisite-options select{width:100%;max-width:100%;height:auto;max-height:50dvh;white-space:normal}
+.prerequisite-options option{white-space:normal;overflow-wrap:anywhere;padding:8px}
+input,textarea,select,fieldset{max-width:100%;min-width:0}
+
+html,body{max-width:100%;min-width:0}
+main,main>*,.tasks article{min-width:0;max-width:100%}
+.task,.space,summary,p,li{overflow-wrap:anywhere}
+.task{white-space:pre-wrap}
+.modal{height:100dvh;max-height:100dvh;padding:16px}
+.modal section{min-width:0;max-width:min(440px,100%);max-height:calc(100dvh - 32px);overflow:auto;overflow-wrap:anywhere;overscroll-behavior:contain}
+.record-overlay .record-card{max-height:calc(100dvh - 32px)}
+.record-toolbar{flex-wrap:nowrap}
+.record-toolbar h2{min-width:0;overflow-wrap:anywhere}
+.record-toolbar button{flex:0 0 44px}

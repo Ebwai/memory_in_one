@@ -19,7 +19,7 @@ async function files(directory) {
 export async function buildServerRelease() {
   const { version } = JSON.parse(await readFile("package.json", "utf8"));
   if (!/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version)) throw new Error("Release version must be a safe semantic version");
-  const output = resolve(".build/release");
+  const output = resolve(`.build/release/server_application/ubuntu/server_ubuntu_v${version}`);
   await mkdir(output, { recursive: true });
   // A fresh staging tree prevents old Electron or client files leaking into server packages.
   const staging = join(output, ".server-stage-" + Date.now());
@@ -53,8 +53,9 @@ export async function buildServerRelease() {
   const generic = join(output, `workspace-server-v${version}`);
   // Preserve old generated distributions instead of recursively deleting a computed path.
   for (const name of [`workspace-server-v${version}`, `workspace-server-ubuntu-v${version}`, `workspace-server-windows-v${version}`]) {
-    const target = resolve(output, name);
-    if (relative(output, target).startsWith("..")) throw new Error("Release target escaped its output directory");
+    const target = name.includes("-windows-") ? resolve(`.build/release/server_application/windows/server_windows_v${version}`, name) : resolve(output, name);
+    await mkdir(resolve(target, ".."), { recursive: true });
+    if (relative(resolve(".build/release"), target).startsWith("..")) throw new Error("Release target escaped its output directory");
     try { await rename(target, target + ".previous-" + Date.now()); } catch (error) { if (error.code !== "ENOENT") throw error; }
     await cp(staging, target, { recursive: true });
   }
@@ -64,7 +65,7 @@ export async function buildServerRelease() {
   if (result.error || result.status !== 0) throw new Error("Ubuntu archive failed: " + (result.error?.message ?? result.stderr));
   await rename(pendingArchive, archive);
   await writeFile(archive + ".sha256", createHash("sha256").update(await readFile(archive)).digest("hex") + "  " + archive.split(/[/\\]/).at(-1) + "\n");
-  return { server: generic, ubuntu: archive, windowsServer: join(output, `workspace-server-windows-v${version}`), releaseId };
+  return { server: generic, ubuntu: archive, windowsServer: resolve(`.build/release/server_application/windows/server_windows_v${version}/workspace-server-windows-v${version}`), releaseId };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) console.log(JSON.stringify(await buildServerRelease()));

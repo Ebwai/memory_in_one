@@ -1,3 +1,5 @@
+import { startCodexBroker, configureCodex } from "./mcp-codex.js";
+import { MCP_ACTIONS } from "@workspace/core";
 import { SshTunnel } from "./ssh-tunnel.js";
 import { DesktopUpdater, acknowledgeUpdate } from "./desktop-update.js";
 import { DESKTOP_VERSION } from "../bridge/update-contracts.js";
@@ -22,6 +24,8 @@ interface PrivateBinding extends WorkspaceBinding { readonly directory: string; 
 interface Pending extends WorkspaceForm { readonly secret: string; readonly outcome: "pending" | "rejected" | "unconfirmed" }
 const servers = new Map<string, { url: string; stop: () => Promise<void> }>();
 let window: BrowserWindow;
+let stopMcpBroker: (() => Promise<void>) | undefined;
+let brokerStarting: Promise<void> | undefined;
 let stopSync: (() => Promise<void>) | undefined;
 let base: string;
 let binding: PrivateBinding | null = null;
@@ -50,6 +54,14 @@ import { todoDefinition, TODO_DOMAIN } from "@workspace/todo-list";
 
 
 
+function readSpaces(): PrivateBinding[] {
+  const stored = readJson<unknown>(join(base, "spaces.json"));
+  if (stored === null) return [];
+  const values = Array.isArray(stored) ? stored : [stored];
+  if (values.some(value => !value || typeof value !== "object" || !value.workspace?.workspaceId || !value.workspace?.authorityId || !["local", "remote"].includes(value.kind))) throw new Error("已有空间目录格式无效，请保留原文件并核对。");
+  return values as PrivateBinding[];
+}
+
 function atomicJson(path: string, value: unknown): void {
   const prior = path === join(base, "binding.json") ? readJson<PrivateBinding>(path) : null;
   const temp = path + "." + randomUUID() + ".tmp";
@@ -57,7 +69,7 @@ function atomicJson(path: string, value: unknown): void {
   try { writeFileSync(descriptor, JSON.stringify(value)); fsyncSync(descriptor); } finally { closeSync(descriptor); }
   renameSync(temp, path);
   if (path === join(base, "binding.json")) {
-    const entries = readJson<PrivateBinding[]>(join(base, "spaces.json")) ?? [];
+    const entries = readSpaces();
     const map = new Map(entries.map(item => [item.workspace.workspaceId, item]));
     if (prior) map.set(prior.workspace.workspaceId, prior);
     const next = value as PrivateBinding; map.set(next.workspace.workspaceId, next);
@@ -307,8 +319,78 @@ app.whenReady().then(async () => {
     if (!response.ok || result.workspace?.workspaceId !== binding.workspace.workspaceId || result.workspace.authorityId !== binding.workspace.authorityId) throw new Error("无法完整读取原统一位置范围，未切换来源。");
     return { ...result, location: binding.location };
   });
+  const regrantSpaces = new Set<string>();
+  const brokerCredentials = new Map<string, Promise<{ endpoint: string; credential: string }>>();
+  const allSpaces = () => {
+    const entries = readSpaces();
+    const map = new Map(entries.map(space => [space.workspace.workspaceId, space]));
+    if (binding) map.set(binding.workspace.workspaceId, binding);
+    return [...map.values()];
+  };
+  async function ensureBroker() {
+    if (stopMcpBroker) return;
+    if (brokerStarting) return brokerStarting;
+    brokerStarting = (async () => {
+      stopMcpBroker = await startCodexBroker({
+        descriptor: join(base, "codex-mcp-broker.json"),
+        spaces: allSpaces,
+        remote: async (space, method, input) => {
+          const id = space.workspace.workspaceId + ":" + space.workspace.authorityId;
+          let pending = brokerCredentials.get(id);
+          if (!pending) {
+            pending = (async () => {
+              const target = allSpaces().find(entry => entry.workspace.workspaceId === space.workspace.workspaceId)!;
+              const owner = target.kind === "local" ? existingLocalToken(target.directory) : await decrypt(target.secret);
+              const endpoint = target.kind === "local" ? await localServer(target.directory, owner) : target.endpoint;
+              const identity = await new HttpWorkspaceLocation(endpoint, owner).inspect();
+              if (identity?.workspaceId !== target.workspace.workspaceId || identity.authorityId !== target.workspace.authorityId) throw new Error("空间身份不匹配。");
+              const manage = async (action: string, parameters: unknown = {}) => {
+                const response = await fetch(endpoint.replace(/\/$/, "") + "/v1/mcp/" + action, { method: "POST", headers: { authorization: "Bearer " + owner, "content-type": "application/json" }, body: JSON.stringify(parameters), signal: AbortSignal.timeout(15000) });
+                if (!response.ok) throw new Error("空间 MCP 授权不可用。");
+                return response.json();
+              };
+              const vaultPath = join(base, "mcp-credentials.json");
+              const vault = readJson<Record<string, Record<string, string>>>(vaultPath) ?? {};
+              const grants = await manage("grants") as { id: string; name: string; revoked: boolean }[];
+              const existing = grants.find(grant => grant.name === "Codex 一键接入" && !grant.revoked && vault[id]?.[grant.id]);
+              if (existing) { regrantSpaces.delete(id); return { endpoint, credential: await decrypt(vault[id]![existing.id]!) }; }
+              const regrant = regrantSpaces.delete(id);
+              if (!regrant && grants.some(grant => grant.name === "Codex 一键接入" && grant.revoked)) throw new Error("Codex 授权已撤销，请在 MCP 管理中重新授权。");
+              const created = await manage("grant-create", { name: "Codex 一键接入", domains: ["*"], actions: MCP_ACTIONS });
+              const encrypted = await encrypt(created.credential);
+              const latest = readJson<Record<string, Record<string, string>>>(vaultPath) ?? {};
+              latest[id] = { ...latest[id], [created.grant.id]: encrypted };
+              atomicJson(vaultPath, latest);
+              return { endpoint, credential: created.credential as string };
+            })();
+            brokerCredentials.set(id, pending);
+            void pending.catch(() => { if (brokerCredentials.get(id) === pending) brokerCredentials.delete(id); });
+          }
+          const remote = await pending;
+          if (method === "write") {
+            const capability = await fetch(remote.endpoint.replace(/\/$/, "") + "/v1/mcp/tools", { method: "POST", headers: { authorization: "Bearer " + remote.credential, "content-type": "application/json" }, body: "{}", signal: AbortSignal.timeout(15000) });
+            if (!capability.ok || (await capability.json()).contentProtocol !== 2) throw new Error("该空间统一位置需要升级到 v1.3.5，才能使用新版内容工具。");
+          }
+          const response = await fetch(remote.endpoint.replace(/\/$/, "") + "/v1/mcp/" + method, { method: "POST", headers: { authorization: "Bearer " + remote.credential, "content-type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(20000) });
+          const result = await response.json();
+          if (!response.ok) { brokerCredentials.delete(id); throw new Error(result.message ?? "空间请求失败。"); }
+          return result;
+        },
+      });
+    })().finally(() => { brokerStarting = undefined; });
+    return brokerStarting;
+  }
   ipcMain.handle("workspace:mcp", async (event, method: unknown, input: unknown) => {
     check(event); await startup;
+    if (method === "enable-codex") {
+      if ((input as { platform?: string })?.platform !== "codex") throw new Error("请选择 Codex 平台。");
+      brokerCredentials.clear();
+      for (const space of allSpaces()) regrantSpaces.add(space.workspace.workspaceId + ":" + space.workspace.authorityId);
+      await ensureBroker();
+      const message = await configureCodex(process.execPath, app.isPackaged ? join(app.getAppPath(), "apps/mcp/protocol/main.mjs") : fileURLToPath(new URL("../../../mcp/protocol/main.mjs", import.meta.url)), join(base, "codex-mcp-broker.json"));
+      atomicJson(join(base, "codex-mcp-enabled.json"), { enabled: true });
+      return { message };
+    }
     if (!binding || typeof method !== "string" || !["configuration", "credentials", "grants", "calls", "directory", "grant-create", "grant-revoke"].includes(method)) throw new Error("管理请求不可用。");
     const token = binding.kind === "local" ? existingLocalToken(binding.directory) : await decrypt(binding.secret);
     const endpoint = binding.kind === "local" ? await localServer(binding.directory, token) : binding.endpoint;
@@ -349,7 +431,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("workspace:spaces", async (event, action: unknown, id: unknown) => {
     check(event); await startup;
-    const entries = readJson<PrivateBinding[]>(join(base, "spaces.json")) ?? [];
+    const entries = readSpaces();
     const map = new Map(entries.map(item => [item.workspace.workspaceId, item]));
     if (binding) map.set(binding.workspace.workspaceId, binding);
     if (action === "switch") {
@@ -390,7 +472,7 @@ app.whenReady().then(async () => {
         catch { throw new Error("服务器地址无效，请填写 HTTPS 地址；回环地址可使用 HTTP。"); }
       }
       const workspace = await inspectExistingWorkspace(new HttpWorkspaceLocation(endpoint, token), form.additional ? null : binding?.workspace ?? null);
-      const known = (readJson<PrivateBinding[]>(join(base, "spaces.json")) ?? []).find(entry => entry.workspace.workspaceId === workspace.workspaceId);
+      const known = (readSpaces()).find(entry => entry.workspace.workspaceId === workspace.workspaceId);
       if (known && known.workspace.authorityId !== workspace.authorityId) throw new Error("该空间身份对应另一个统一位置，请通过迁移流程切换。");
       const target: PrivateBinding = { workspace, kind: form.kind, endpoint,
         directory: form.directory, location: form.kind === "local" ? form.directory : endpoint,
@@ -559,6 +641,7 @@ app.whenReady().then(async () => {
   stopSync = sync.stop;
   installDomainFeatures(check, () => binding ? publicBinding(binding) : null, () => base, () => { void sync.trigger(true); });
   void startup.then(() => sync.trigger());
+  if (existsSync(join(base, "codex-mcp-enabled.json"))) void startup.then(ensureBroker).catch(() => undefined);
 
   await window.loadFile(fileURLToPath(new URL("../renderer/workspace.html", import.meta.url)));
 }).catch(() => app.exit(1));
@@ -568,6 +651,6 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   if (stopping) return;
   stopping = true;
-  void (async () => { await stopSync?.(); await tunnel?.stop(); await Promise.all([...servers.values()].map((server) => server.stop())); })().finally(() => { stopped = true; app.quit(); });
+  void (async () => { await stopMcpBroker?.(); await stopSync?.(); await tunnel?.stop(); await Promise.all([...servers.values()].map((server) => server.stop())); })().finally(() => { stopped = true; app.quit(); });
 });
 

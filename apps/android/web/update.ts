@@ -1,5 +1,5 @@
 export interface AndroidUpdate { version: string; notes: string; url: string; sha256: string; size: number }
-export function selectAndroidUpdate(releases: any, current='1.3.3'): AndroidUpdate|null {
+export function selectAndroidUpdate(releases: any, current='1.3.5'): AndroidUpdate|null {
   if(!Array.isArray(releases))throw new Error('版本响应无效。');
   const parts=(v:string)=>/^v?\d+\.\d+\.\d+$/.test(v)?v.replace(/^v/,'').split('.').map(Number):null;
   const compare=(a:number[],b:number[])=>a[0]!-b[0]!||a[1]!-b[1]!||a[2]!-b[2]!;

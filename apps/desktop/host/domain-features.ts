@@ -46,6 +46,13 @@ export function installDomainFeatures(check: (event: IpcMainInvokeEvent) => void
         writeAttempt = true;
         entries = await registry.list();
       }
+      const notes = entries.find(entry => entry.definition.domainId === NOTES_DOMAIN);
+      const notesDefinition = presetDefinition(NOTES_DOMAIN);
+      if (notes && notes.definition.version !== notesDefinition.version) {
+        await registry.register(notesDefinition, "preset-notes-upgrade-" + notesDefinition.version);
+        writeAttempt = true;
+        entries = await registry.list();
+      }
       for (const entry of entries) if (matchesPreset(entry.definition) && !entry.programAvailable) {
         await registry.register(entry.definition, "preset-restore-" + entry.definition.domainId);
       }

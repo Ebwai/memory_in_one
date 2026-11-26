@@ -448,3 +448,15 @@ main[data-managing=true]>.management-nav{z-index:10}
 .todo-review>.review-heading{position:static;width:auto;height:auto;overflow:visible;clip-path:none;margin-top:14px}
 .todo-review-list[hidden]{display:none!important}
 .inspector-value{box-sizing:border-box}
+
+*{box-sizing:border-box}
+.note-details{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:20px;box-sizing:border-box}
+.note-details textarea{width:100%;min-height:160px;max-height:50dvh}
+.note-details input{width:100%}
+.note-details button{margin:8px 8px 0 0}
+.prerequisite-picker{position:relative;min-width:0;max-width:100%}
+.prerequisite-picker summary{overflow-wrap:anywhere;cursor:pointer}
+.prerequisite-options{margin:0;position:fixed;z-index:100;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 32px));max-height:70dvh;overflow:auto;background:#fff;color:#222;border:2px solid #444;padding:16px;box-shadow:0 10px 40px #0004}
+.prerequisite-options select{width:100%;max-width:100%;height:auto;max-height:50dvh;white-space:normal}
+.prerequisite-options option{white-space:normal;overflow-wrap:anywhere;padding:8px}
+input,textarea,select,fieldset{max-width:100%;min-width:0}

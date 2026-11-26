@@ -11,7 +11,7 @@ import { DESKTOP_VERSION } from "../../apps/desktop/dist/bridge/update-contracts
 
 test("N62 distributed standalone server and bundled MCP entry run independently", { timeout: 60000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), "workspace-server-release-"));
-  const root = resolve(`.build/release/workspace-server-v${DESKTOP_VERSION}`);
+  const root = resolve(`.build/release/server_application/ubuntu/server_ubuntu_v${DESKTOP_VERSION}/workspace-server-v${DESKTOP_VERSION}`);
   const token = "release-owner-for-isolated-test-0123456789";
   const server = spawn(process.execPath, [join(root, "apps/server/dist/composition/main.js")], { cwd: root, env: { ...process.env, WORKSPACE_DATA_DIRECTORY: directory, WORKSPACE_BOOTSTRAP_TOKEN: token, WORKSPACE_PORT: "0" }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   let client;
@@ -43,7 +43,7 @@ test("N62 distributed standalone server and bundled MCP entry run independently"
 test("N62 distributed Windows executable starts without source arguments and recovers saved task after restart", { timeout: 60000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), "workspace-release-ui-"));
   const env = { ...process.env, WORKSPACE_CLIENT_DIRECTORY: directory, WORKSPACE_SETUP_HIDDEN: "1" }; delete env.ELECTRON_RUN_AS_NODE;
-  const executablePath = resolve(`.build/release/workspace-windows-v${DESKTOP_VERSION}/工作空间.exe`);
+  const executablePath = resolve(`.build/release/user_application/windows/user_windows_v${DESKTOP_VERSION}/workspace-windows-v${DESKTOP_VERSION}/工作空间.exe`);
   let app;
   try {
     app = await _electron.launch({ executablePath, args: [], env });

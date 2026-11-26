@@ -12,7 +12,7 @@ final class SshTunnel {
   synchronized String connect(String source) throws Exception {
     JSONObject config=new JSONObject(source);
     String host=config.getString("host"), user=config.getString("user"), expected=config.getString("fingerprint");
-    int port=config.optInt("port",22), remotePort=config.optInt("remotePort",4010), localPort=config.optInt("localPort",42081);
+    int port=config.optInt("port",22), remotePort=config.optInt("remotePort",43127), localPort=config.optInt("localPort",42081);
     if(host.isEmpty()||user.isEmpty()||port<1||port>65535||remotePort<1||remotePort>65535||localPort<1024||localPort>65535||!expected.startsWith("SHA256:"))throw new IllegalArgumentException("请填写 SSH 地址、用户、端口及已核验的 SHA256 主机指纹。");
     final String[] actual={""};
     JSch ssh=new JSch();

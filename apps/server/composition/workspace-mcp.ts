@@ -107,7 +107,38 @@ export class WorkspaceMcp {
           let value: ContentValue;
           let batch: UploadRequest[] | undefined;
           if (domainId === TODO_DOMAIN) {
-            if (action === "create") value = prepareTodo(raw.text, audit.time);
+            if (action === "create" || action === "update" && raw.mode !== undefined) {
+              const modes: Record<string, string[]> = { text: ["text"], notes: ["notes"], prerequisite: ["prerequisiteId"], date: ["dueDate"], repeat: ["frequency", "target", "timezone"], completion: ["completed"], all: ["text", "notes", "prerequisiteId", "dueDate", "frequency", "target", "timezone", "completed"] };
+              if (raw.dueDate !== undefined) access.require(grant, domainId, "date");
+              if (raw.completed === true || action === "update" && raw.completed === false) access.require(grant, domainId, raw.completed ? "complete" : "restore");
+              const mode = action === "create" ? "all" : String(raw.mode);
+              const fields = modes[mode];
+              if (!fields || !fields.some(field => raw[field] !== undefined)) throw new Error("请选择属性 mode 并提供对应的属性值。");
+              if (modes.all!.some(field => raw[field] !== undefined && !fields.includes(field))) throw new Error("属性与 mode 不匹配。");
+              const versions = await store.authorityList(identity.workspaceId, domainId);
+              if (current && current.revision !== base?.revision) throw new Error("事项进度已变化，请重新查询。");
+              const original = versions.map(v => ({workspaceId:v.workspaceId,domainId:v.domainId,recordId:v.recordId,localSequence:v.revision,deleted:v.value===null,payload:v.value}));
+              let rows = action === "create" ? [...original, {workspaceId:identity.workspaceId,domainId,recordId,localSequence:0,deleted:false,payload:prepareTodo(raw.text,audit.time)}] : original;
+              const commands: import("@workspace/todo-list").TodoCommand[] = [];
+              if (action !== "create" && raw.text !== undefined) commands.push({kind:"text",text:raw.text as string});
+              if (raw.notes !== undefined) commands.push({kind:"notes",notes:raw.notes as string});
+              if (raw.dueDate !== undefined) commands.push({kind:"date",dueDate:raw.dueDate as string|null});
+              if (raw.frequency !== undefined) commands.push({kind:"repeat",frequency:raw.frequency as "day"|"week"|"month"|null,target:Number(raw.target ?? 1),timezone:String(raw.timezone ?? "UTC")});
+              else if (raw.target !== undefined || raw.timezone !== undefined) throw new Error("修改重复规则时需要 frequency。");
+              if (raw.prerequisiteId !== undefined) commands.push({kind:"prerequisite",recordId:raw.prerequisiteId as string|null});
+              if (raw.completed !== undefined) commands.push({kind:"complete",completed:raw.completed as boolean});
+              for (const command of commands) {
+                const changes = prepareTodoTree(rows,recordId,command,audit.time);
+                rows = rows.map(row => { const change = changes.find(change => change.recordId === row.recordId); return change ? {...row,payload:change.value,deleted:change.value===null} : row; });
+              }
+              value = rows.find(row => row.recordId === recordId)!.payload;
+              batch = rows.filter(row => row.recordId !== recordId && canonical(row.payload) !== canonical(original.find(old => old.recordId === row.recordId)?.payload)).map(row => ({
+                ...identity,domainId,recordId:row.recordId,operationId:audit.operationId+"~"+row.recordId,baseRevision:versions.find(v=>v.recordId===row.recordId)!.revision,value:row.payload,
+                changed:Object.entries(handler.policy?.attributes??{}).filter(([,keys])=>keys.some(key=>canonical(original.find(old=>old.recordId===row.recordId)?.payload?.[key])!==canonical(row.payload?.[key]))).map(([key])=>key),resolution:false,
+              }));
+              if (!batch.length) batch = undefined;
+            }
+            else if (action === "create") value = prepareTodo(raw.text, audit.time);
             else {
               const command = action === "update" ? (raw.notes !== undefined ? { kind: "notes", notes: raw.notes } : raw.frequency !== undefined ? { kind: "repeat", frequency: raw.frequency, target: raw.target, timezone: raw.timezone } : { kind: "text", text: raw.text }) : action === "date" ? { kind: "date", dueDate: raw.dueDate } :
                 action === "complete" || action === "restore" ? { kind: "complete", completed: action === "complete" } : action === "delete" ? { kind: "delete", confirmed: true } : null;
@@ -130,7 +161,12 @@ export class WorkspaceMcp {
             const registration = await store.authorityRead({ workspaceId: identity.workspaceId, domainId: DOMAIN_REGISTRY, recordId: domainId });
             const definition = parseExtension(JSON.stringify((registration!.value as unknown as DomainRegistration).definition));
             if (!["create", "update", "delete"].includes(action) || !definition.actions.includes(action as "create")) throw new Error("领域未声明此动作。");
-            value = action === "delete" ? null : raw.payload as JsonObject;
+            if (domainId === "preset.notes" && action !== "delete" && raw.payload === undefined) {
+              if (action === "update" && raw.text === undefined && raw.title === undefined) throw new Error("请提供需要修改的标题或正文。");
+              const note: JsonObject = action === "create" ? { createdAt: audit.time } : { ...base!.value! };
+              for (const field of ["text", "title"]) if (raw[field] !== undefined) note[field] = raw[field]!;
+              value = note;
+            } else value = action === "delete" ? null : raw.payload as JsonObject;
             if (value !== null) validateExtensionRecord(definition, value);
           }
           handler.validate(value, base?.value ?? null, current === null);
@@ -165,7 +201,7 @@ export class WorkspaceMcp {
           const r = await store.authorityRead({ workspaceId: identity.workspaceId, domainId: DOMAIN_REGISTRY, recordId: id });
           capabilities[id] = id === TODO_DOMAIN ? ["create", "update", "date", "complete", "restore", "delete"] : (r?.value as unknown as DomainRegistration).definition.actions;
         }
-        return { workspace: identity, grant: { name: grant.name, actions: grant.actions }, authorizedDomains: grant.domains, domains, capabilities };
+        return { contentProtocol: 2, workspace: identity, grant: { name: grant.name, actions: grant.actions }, authorizedDomains: grant.domains, domains, capabilities };
       }
       throw new Error("工具不可用。");
     } finally { await store.close(); }

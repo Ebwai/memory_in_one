@@ -6,13 +6,13 @@
 
 目标为 Ubuntu 22.04 及更新版本，提供 x86_64/arm64 的运行时选择。实际测试系统和 CPU 以本文末尾记录为准。
 
-1. 将 `.build/release/workspace-server-ubuntu-v0.1.0.tar.gz` 和同名 `.sha256` 文件上传到阿里云服务器，例如家目录。
+1. 将当前版本目录 `.build/release/server_application/ubuntu/server_ubuntu_v1.3.5/` 中的 `workspace-server-ubuntu-v1.3.5.tar.gz` 和同名 `.sha256` 文件上传到服务器，例如家目录。
 2. 登录 Ubuntu，在上传目录执行：
 
 ```bash
-sha256sum --check workspace-server-ubuntu-v0.1.0.tar.gz.sha256
-tar -xzf workspace-server-ubuntu-v0.1.0.tar.gz
-cd workspace-server-ubuntu-v0.1.0
+sha256sum --check workspace-server-ubuntu-v1.3.5.tar.gz.sha256
+tar -xzf workspace-server-ubuntu-v1.3.5.tar.gz
+cd workspace-server-ubuntu-v1.3.5
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl xz-utils
 sudo bash deploy/server/ubuntu/install.sh

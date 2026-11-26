@@ -7,7 +7,7 @@ import * as ResEdit from "resedit";
 import { DESKTOP_VERSION } from "../apps/desktop/dist/bridge/update-contracts.js";
 
 const require = createRequire(import.meta.url);
-const root = resolve(process.env.WORKSPACE_RELEASE_DIRECTORY ?? `.build/release/workspace-windows-v${DESKTOP_VERSION}`);
+const root = resolve(process.env.WORKSPACE_RELEASE_DIRECTORY ?? `.build/release/user_application/windows/user_windows_v${DESKTOP_VERSION}/workspace-windows-v${DESKTOP_VERSION}`);
 const application = join(root, "resources/app");
 await mkdir(application, { recursive: true });
 await writeFile(join(root, "workspace-release.json"), JSON.stringify({ version: DESKTOP_VERSION, platform: "win32", arch: process.arch }, null, 2));

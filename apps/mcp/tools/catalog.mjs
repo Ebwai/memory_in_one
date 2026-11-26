@@ -1,9 +1,10 @@
+import { contentTools } from "./content.mjs";
 const string = { type: "string" };
 const operation = { ...string, pattern: "^[a-zA-Z0-9_-]{1,100}$", description: "同次操作重试必须保留此身份；新的意图使用新身份。" };
 const revision = { type: "integer", minimum: 1, description: "查询返回的原版本。" };
 export function catalog(info) {
   if (!info.domains) throw new Error("统一位置不可达，不能发现当前工具。");
-  const tools = [];
+  const tools = contentTools(info);
   const add = (name, description, properties, required, readOnly = false) => tools.push({ name, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { readOnlyHint: readOnly, destructiveHint: name.endsWith("delete") || name === "domain_remove", idempotentHint: true } });
   add("call_status", "核对当前接入来源的原调用状态；不执行动作。", { operationId: string }, ["operationId"], true);
   if (info.authorizedDomains.includes("*")) {
@@ -13,11 +14,13 @@ export function catalog(info) {
   }
   for (const action of info.grant.actions) {
     if (action === "read" && info.domains.length) {
-      const domainId = { ...string, enum: info.domains };
+      const domains = info.domains.filter(id => !["builtin.todo", "preset.notes"].includes(id));
+      if (!domains.length) continue;
+      const domainId = { ...string, enum: domains };
       add("content_list", "读取授权领域全部未删除的权威内容，含已完成任务；不包含设备未同步成果。", { domainId }, ["domainId"], true);
       add("content_get", "读取原内容和已确认版本；不存在与领域不可用分别反馈。", { domainId, recordId: string }, ["domainId", "recordId"], true);
     } else if (["create", "update", "date", "complete", "restore", "delete"].includes(action)) {
-      const domains = info.domains.filter(id => (info.capabilities?.[id] ?? []).includes(action));
+      const domains = info.domains.filter(id => !["builtin.todo", "preset.notes"].includes(id) && (info.capabilities?.[id] ?? []).includes(action));
       if (!domains.length) continue;
       const properties = { domainId: { ...string, enum: domains }, operationId: operation };
       const required = ["domainId", "operationId"];
@@ -35,6 +38,10 @@ export function catalog(info) {
       if (["install", "remove"].includes(action)) { properties.target = { type: "string", enum: ["server"], description: "只作用于服务器；其他客户端不受影响。" }; required.push("target"); }
       add("domain_" + action, "按独立管理权限执行 " + action + (["install", "remove"].includes(action) ? "（仅服务器程序，保留数据）" : "（工作空间登记及启用状态）"), properties, required);
     }
+  }
+  if (info.workspaces) {
+    add("workspace_list", "列出当前及以后接入的全部工作空间，调用其他工具前选择 workspaceId。", {}, [], true);
+    for (const tool of tools) if (tool.name !== "workspace_list") tool.inputSchema.properties.workspaceId = { type: "string", description: "从 workspace_list 选择空间 ID。" };
   }
   return tools;
 }

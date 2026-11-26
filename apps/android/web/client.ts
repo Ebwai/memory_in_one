@@ -60,6 +60,9 @@ export class Client {
     this.setting('current', replica);
     await this.programs.stage(todoDefinition);
     if (!profile.endpoint && !profile.replica.startsWith('restore-') && !(await this.registry.list()).length) await this.builtins();
+    const notes = (await this.registry.list()).find(entry => entry.definition.domainId === NOTES_DOMAIN);
+    const notesDefinition = presetDefinition(NOTES_DOMAIN);
+    if (notes && notes.definition.version !== notesDefinition.version) await this.registry.register(notesDefinition, "preset-notes-upgrade-" + notesDefinition.version);
     for (const entry of await this.registry.list()) if (matchesPreset(entry.definition)) await this.programs.stage(entry.definition);
   }
   async createLocal(name: string, id = crypto.randomUUID()) {
@@ -160,6 +163,9 @@ export class Client {
         return registration ? { attributes: {}, validate: value => { if (value !== null) validateExtensionRecord(registration.definition, value); } } : undefined;
       })()).run();
       for (const row of await store.listRecords({ workspaceId: profile.identity.workspaceId, domainId: 'system.domains' })) { const entry = row.payload as unknown as DomainRegistration | null; if (!row.deleted && entry && matchesPreset(entry.definition)) await this.programs.stage(entry.definition); }
+      const notes = (await this.registry.list()).find(entry => entry.definition.domainId === NOTES_DOMAIN);
+      const notesDefinition = presetDefinition(NOTES_DOMAIN);
+      if (notes && notes.definition.version !== notesDefinition.version) await this.registry.register(notesDefinition, 'preset-notes-upgrade-' + notesDefinition.version);
       const status = await store.syncSummary(profile.identity.workspaceId);
       this.message = errors[0] ?? (status.conflicts ? `有 ${status.conflicts} 项冲突待处理。` : status.pending ? `有 ${status.pending} 项本机改动待同步。` : '已同步到统一位置。');
     })().catch(error => { this.message = error instanceof Error ? error.message : '服务器暂不可达，本机内容保留。'; }).finally(() => { this.syncing = null; });

@@ -64,3 +64,12 @@ SQLite v5 事务升级 v1–v4，追加授权、调用记录、冻结请求和�
 - tests/e2e/mcp-management.test.mjs：真实桌面授权管理与范围确认界面。
 
 当前验收是实际 SDK 客户端进程，不是具名 Codex 或 Claude Code 客户端，也不验证外部客户端语音输入。官方选型依据：[SDK v1 能力](https://ts.sdk.modelcontextprotocol.io/capabilities)、[官方 SDK 发行包](https://www.npmjs.com/package/@modelcontextprotocol/sdk)。
+
+
+## v1.3.5 多空间接入及内容 CRUD
+
+desktop/host/mcp-codex.ts 提供只监听回环地址的带随机凭据桥接。描述文件在本机原子更新，stdio MCP 每次请求读取当前地址，使桌面应用重启后客户端能够接续。桥接从原 spaces.json 动态发现空间，按空间核验身份、创建全功能具名授权并加密保存在原凭据仓库。撤销授权会阻断访问，用户重新点击一键开启后可重新授权。
+
+Codex 配置通过其 mcp add 命令写入用户目录，保留其他设置。配置只包含本机描述文件路径和启动参数，实际空间凭据仍由桌面宿主管理。应用退出时关闭桥接。
+
+apps/mcp/tools/content.mjs 整理待办和随记各四个工具。查询通过共享 filterTodoTree 完成时间、状态、关键字及祖先路径筛选，返回属性投影始终保留 recordId/revision。待办字段修改在服务端原集合快照中按 mode 转成 prepareTodoTree 的命令，共同提交涉及的祖先修改。新增、更新及其重试使用原调用幂等与审计链路；随记创建时间由服务端产生。

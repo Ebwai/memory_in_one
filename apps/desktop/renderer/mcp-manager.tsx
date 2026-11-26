@@ -34,7 +34,14 @@ export function McpManager() {
   }
   const labels: Record<string, string> = { succeeded: "已确认成功", failed: "失败", conflict: "冲突", unconfirmed: "结果待核对", "pending-confirmation": "等待用户确认", cancelled: "已取消" };
   return <section className="card" data-testid="mcp-management">
-    <h2>MCP 接入管理</h2><p>为外部客户端创建具名授权，按领域及动作开放能力，随时撤销后续访问。</p>
+    <h2>MCP 接入管理</h2>
+    <label>平台<select aria-label="MCP 平台" defaultValue="codex"><option value="codex">Codex</option></select></label>
+    <button disabled={busy} onClick={() => {
+      setBusy(true); setError("");
+      void window.workspaceSetup.mcp("enable-codex", { platform: "codex" }).then(result => setCopyStatus((result as { message: string }).message)).catch(error => setError(error.message)).finally(() => setBusy(false));
+    }}>一键开启 MCP</button>
+    <p role="status">{copyStatus}</p>
+    <p>默认开放当前及以后接入的所有空间和全部功能。使用时保持本应用运行。</p><p>为外部客户端创建具名授权，按领域及动作开放能力，随时撤销后续访问。</p>
     <details>
       <summary>MCP 使用方法（含 Codex 配置）</summary>
       <p>MCP 让 Codex 等外部 AI 查询和操作本工作空间。创建授权相当于发放一把限定领域与动作的钥匙；创建后还需在外部客户端完成配置。</p>
@@ -67,8 +74,8 @@ WORKSPACE_MCP_TOKEN = "替换为首次显示的 credential"`}</pre>
       </fieldset>
       {configuration !== null && <div data-testid="mcp-credential"><p>请将接入凭据保存到外部客户端配置；本机保存成功后也可从授权列表再次复制。WORKSPACE_MCP_URL 使用当前服务地址，WORKSPACE_MCP_TOKEN 使用 credential。</p><pre>{JSON.stringify(configuration, null, 2)}</pre><button onClick={() => setConfiguration(null)}>隐藏凭据</button></div>}
       <h3>当前授权</h3>{grants.map(g => <div key={g.id}><strong>{g.name}</strong><p>{g.domains.includes("*") ? "所有领域（含未来新增）" : g.domains.join("、")} · {g.actions.join("、")} · {g.revoked ? "已撤销" : "有效"}</p>{credentials[g.id] ? <div><code>{visible.includes(g.id) ? credentials[g.id] : "••••••••••••••••"}</code><button onClick={() => setVisible(visible.includes(g.id) ? visible.filter(id => id !== g.id) : [...visible, g.id])}>{visible.includes(g.id) ? "隐藏凭据" : "显示凭据"}</button><button onClick={async () => { try { await navigator.clipboard.writeText(credentials[g.id]!); setCopyStatus("凭据已复制" + (g.revoked ? "（已撤销，不可使用）" : "")); } catch { setCopyStatus("复制失败，请显示凭据后手动复制。"); } }}>复制凭据</button>{!g.revoked && <button onClick={async () => { try { const config = await window.workspaceSetup.mcp("configuration", { id: g.id }); await navigator.clipboard.writeText(String(config)); setCopyStatus("Codex 配置已复制，已填入本机程序路径、服务地址和凭据。"); } catch { setCopyStatus("无法复制配置，请检查连接与授权状态。"); } }}>复制 Codex 配置</button>}{g.revoked && <p>此凭据已撤销，不可继续访问。</p>}</div> : <p>本机未保存此授权的凭据；旧凭据无法还原，请重新创建。</p>}{!g.revoked && <button disabled={busy} onClick={() => void revoke(g.id)}>撤销 {g.name}</button>}</div>)}
-      <p role="status">{copyStatus}</p>
       <h3>调用与授权记录</h3>{calls.length === 0 ? <p>尚无调用记录。</p> : calls.map(c => <article key={c.operationId}><strong>{c.sourceName} · {c.action} · {labels[c.status]}</strong><p>{c.summary}</p><small>{c.time} · {c.domainId} · {c.recordId} · {c.confirmed ? "已作具体确认" : "未作具体确认"}</small></article>)}
-      {error && <p role="alert">{error}</p>}</>}
+      </>}
+    {error && <p role="alert">{error}</p>}
   </section>;
 }

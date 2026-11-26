@@ -153,14 +153,19 @@ export const TodoDetails = forwardRef<DomainViewHandle, {
       <p className="inspector-status">□　{display.status === "completed" ? "已完成" : display.status === "unfinished" ? "进行中" : "无法识别，待核对"}</p>
       <div className="inspector-field"><h3>▧　备注</h3>{editor?.kind === "notes" ? fieldEditor() : <div className="inspector-value inspector-notes direct-edit" tabIndex={0} onDoubleClick={() => void beginEditor("notes")} onKeyDown={e => { if (e.key === "Enter") void beginEditor("notes"); }}>{display.notes || "双击添加备注…"}</div>}</div>
       <div className="inspector-field">
-        <label>前置关联 <select disabled={locked || phase !== "ready"} value={String(record.payload?.prerequisiteId ?? "")}
+        <details className="prerequisite-picker" onToggle={event => {
+          const details = event.currentTarget;
+          const dialog = details.querySelector("dialog");
+          if (details.open && dialog && !dialog.open) dialog.showModal();
+          else if (!details.open && dialog?.open) dialog.close();
+        }}><summary>前置关联 · {String(records.find(candidate => candidate.recordId === record.payload?.prerequisiteId)?.payload?.text ?? "无")}</summary><dialog className="prerequisite-options" onCancel={event => { event.currentTarget.closest("details")?.removeAttribute("open"); }}><button type="button" onClick={event => { event.currentTarget.closest("dialog")?.close(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>关闭</button><label>选择任务<select size={6} disabled={locked || phase !== "ready"} value={String(record.payload?.prerequisiteId ?? "")}
           onChange={event => void progress.mutate(record, { kind: "prerequisite", recordId: event.target.value || null }).then(accept)}>
           <option value="">无</option>
           {typeof record.payload?.prerequisiteId === "string" && !records.some(candidate => !candidate.deleted && candidate.recordId === record.payload?.prerequisiteId) &&
             <option value={record.payload.prerequisiteId}>前置任务已删除</option>}
           {records.filter(candidate => !candidate.deleted && candidate.recordId !== record.recordId).map(candidate =>
             <option key={candidate.recordId} value={candidate.recordId}>{String(candidate.payload?.text ?? candidate.recordId)}</option>)}
-        </select></label>
+        </select></label></dialog></details>
       </div>
       <div className="inspector-field"><h3>▦　截止日期</h3>{editor?.kind === "date" ? fieldEditor() : <div className="inspector-value direct-edit" tabIndex={0} onDoubleClick={() => void beginEditor("date")} onKeyDown={e => { if (e.key === "Enter") void beginEditor("date"); }}>{display.dueState === "unset" ? "未设置" : display.dueState === "invalid" ? "无法识别" : display.dueDate}</div>}</div>
       <div className="inspector-field"><h3>⟳　重复规则</h3>{editor?.kind === "repeat" ? fieldEditor() : <div className="inspector-value direct-edit" tabIndex={0} onDoubleClick={() => void beginEditor("repeat")} onKeyDown={e => { if (e.key === "Enter") void beginEditor("repeat"); }}>{display.repeatFrequency ? ({ day: "每日", week: "每周", month: "每月" } as Record<string,string>)[display.repeatFrequency] : "不重复"}</div>}</div>

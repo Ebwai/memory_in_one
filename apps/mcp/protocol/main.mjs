@@ -5,10 +5,17 @@ import { authorityConnection } from "../connections/authority.mjs";
 import { catalog } from "../tools/catalog.mjs";
 import { confirmWithClient } from "../confirmation/respond.mjs";
 
-const endpoint = process.env.WORKSPACE_MCP_URL;
-const credential = process.env.WORKSPACE_MCP_TOKEN;
+import { readFile } from "node:fs/promises";
+import { executeContent } from "../tools/content.mjs";
+const descriptor = process.env.WORKSPACE_MCP_DESCRIPTOR;
+const initial = descriptor ? JSON.parse(await readFile(descriptor, "utf8")) : null;
+const endpoint = initial?.endpoint ?? process.env.WORKSPACE_MCP_URL;
+const credential = initial?.credential ?? process.env.WORKSPACE_MCP_TOKEN;
 if (!endpoint || !credential) throw new Error("Set WORKSPACE_MCP_URL and WORKSPACE_MCP_TOKEN using a named grant.");
-const remote = authorityConnection(endpoint, credential);
+const remote = async (method, input = {}) => {
+  const current = descriptor ? JSON.parse(await readFile(descriptor, "utf8")) : { endpoint, credential };
+  return authorityConnection(current.endpoint, current.credential)(method, input);
+};
 const server = new Server({ name: "personal-information-workspace", version: "0.1.0" }, { capabilities: { tools: { listChanged: true } } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: catalog(await remote("tools")) }));
 server.setRequestHandler(CallToolRequestSchema, async request => {
@@ -19,6 +26,17 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     const args = request.params.arguments ?? {};
     if (Object.keys(args).some(k => !Object.hasOwn(tool.inputSchema.properties, k)) || tool.inputSchema.required.some(k => !Object.hasOwn(args, k))) throw new Error("工具参数无效或缺少必要依据。");
     const name = request.params.name;
+    if (name === "workspace_list" || /^(todo|note)_(create|update|delete|query)$/.test(name)) {
+      if (name !== "workspace_list" && info.contentProtocol !== 2) throw new Error("统一位置需要升级到 v1.3.5，才能使用新版待办和随记工具。");
+      const scoped = (method, input) => remote(method, { ...input, ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}) });
+      let result = name === "workspace_list" ? await remote("spaces") : await executeContent(scoped, name, args);
+      if (result.status === "pending-confirmation") {
+        result = await confirmWithClient(server, scoped, { ...result, confirmationUrl: new URL(result.confirmationPath, endpoint).href }, () => executeContent(scoped, name, args));
+        if (result.status === "pending-confirmation") result.confirmationUrl = new URL(result.confirmationPath, endpoint).href;
+      }
+      if (name === "workspace_list") await server.sendToolListChanged();
+      return { content: [{ type: "text", text: JSON.stringify(result) }], isError: ["rejected", "failed", "conflict", "unconfirmed"].includes(result.status) };
+    }
     const method = name.startsWith("workspace_") ? name.replace("_", "-") : name === "call_status" ? "status" : name === "content_list" ? "list" : name === "content_get" ? "get" : name === "domain_directory" ? "directory" : ["domain_install", "domain_remove"].includes(name) ? "program" : "write";
     const input = method === "write" || method === "program" ? { ...args, action: name.slice(name.indexOf("_") + 1) } : args;
     let result = await remote(method, input);

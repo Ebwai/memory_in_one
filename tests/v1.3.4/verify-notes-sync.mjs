@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
+import { startWorkspaceServer } from '../../apps/server/dist/transport/server.js';
+import { DomainRegistry, SyncEngine, WorkspaceInitialization } from '../../packages/core/dist/index.js';
+import { HttpSyncRemote, HttpWorkspaceLocation, FileExtensionPrograms, SqliteLocalStore } from '../../packages/adapters/dist/index.js';
+import { NOTES_DOMAIN, presetDefinition, noteTitle } from '../../packages/contracts/dist/index.js';
+
+const directory = resolve('tests/v1.3.4/artifacts/notes-sync-' + Date.now());
+await mkdir(directory, { recursive: true });
+const token = randomUUID() + randomUUID();
+const server = await startWorkspaceServer({ directory: join(directory, 'server'), token });
+const a = await SqliteLocalStore.open({ databasePath: join(directory, 'a.sqlite') });
+const b = await SqliteLocalStore.open({ databasePath: join(directory, 'b.sqlite') });
+try {
+  const result = await new WorkspaceInitialization(new HttpWorkspaceLocation(server.url, token), randomUUID, () => new Date().toISOString()).create({ creationId: randomUUID(), name: 'Notes sync QA' });
+  assert.equal(result.status, 'created');
+  const identity = result.workspace;
+  const scope = { workspaceId: identity.workspaceId, domainId: NOTES_DOMAIN, recordId: 'note' };
+  const registry = new DomainRegistry(identity.workspaceId, a, new FileExtensionPrograms(join(directory, 'programs')));
+  await registry.register(presetDefinition(NOTES_DOMAIN, true), 'old-template');
+  await registry.setEnabled(NOTES_DOMAIN, true, 'enable');
+  const content = await registry.contentStore(NOTES_DOMAIN);
+  const payload = { text: '既有随记正文必须完整保留，升级后添加独立标题。', createdAt: new Date().toISOString() };
+  await content.commit({ ...scope, operationId: 'create', kind: 'put', payloadJson: JSON.stringify(payload) }, null);
+  const policy = domain => ({ attributes: domain === 'system.domains' ? { enabled: ['enabled', 'removed'], name: ['displayName'], program: ['definition', 'fingerprint'] } : {}, validate: () => undefined });
+  const remote = new HttpSyncRemote(server.url, token);
+  const first = new SyncEngine(identity, a, remote, policy);
+  const second = new SyncEngine(identity, b, remote, policy);
+  assert.deepEqual(await first.run(), []);
+  assert.deepEqual(await second.run(), []);
+  await registry.register(presetDefinition(NOTES_DOMAIN), 'upgrade-notes');
+  const old = await a.readRecord(scope);
+  await (await registry.contentStore(NOTES_DOMAIN)).commit({ ...scope, operationId: 'title-edit', kind: 'put', payloadJson: JSON.stringify({ ...payload, title: '跨设备标题' }) }, old.localSequence);
+  assert.deepEqual(await first.run(), []);
+  assert.deepEqual(await second.run(), []);
+  const received = await b.readRecord(scope);
+  assert.equal(noteTitle(received.payload), '跨设备标题');
+  assert.equal(received.payload.text, payload.text);
+  assert.equal(received.payload.createdAt, payload.createdAt);
+  assert.equal((await b.listRecords({ workspaceId: identity.workspaceId, domainId: 'system.domains' })).find(row => row.recordId === NOTES_DOMAIN).payload.definition.version, '1.1.0');
+  console.log('PASS real HTTP sync: old notes template upgrades and title/body arrive together on another replica');
+} finally { await a.close(); await b.close(); await server.close(); }

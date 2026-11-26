@@ -32,7 +32,7 @@ export interface WorkspaceBridge {
   recovery(action: "preview" | "restore" | "use-local", ticket?: string): Promise<{ ticket: string; summary: import("@workspace/adapters").RecoverySummary; binding?: WorkspaceBinding } | null>;
   exportFile(source: "authority" | "local"): Promise<{ cancelled: boolean; path?: string; capturedAt?: string }>;
   exportScope(source: "authority" | "local"): Promise<import("@workspace/contracts").ExportScope>;
-  mcp(method: "configuration" | "credentials" | "grants" | "calls" | "directory" | "grant-create" | "grant-revoke", input?: import("@workspace/contracts").JsonObject): Promise<unknown>;
+  mcp(method: "enable-codex" | "configuration" | "credentials" | "grants" | "calls" | "directory" | "grant-create" | "grant-revoke", input?: import("@workspace/contracts").JsonObject): Promise<unknown>;
   topology(): Promise<{ id: string; name: string; seenAt: string; online: boolean }[]>;
   sync(action: "status" | "now"): Promise<SyncScreen>;
   windowAction(action: "floating" | "management" | "pin" | "unpin" | "close" | "minimize" | "request-close"): Promise<void>;

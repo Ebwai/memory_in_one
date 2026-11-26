@@ -1,10 +1,12 @@
-import { isProjectDomain, isPresetDomain } from "@workspace/contracts";
+import { NOTES_DOMAIN, noteTitle, isProjectDomain, isPresetDomain } from "@workspace/contracts";
 import { ConflictPanel } from "./conflict-panel.js";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { DomainEntry, JsonObject, LocalRecord } from "@workspace/contracts";
 
 export interface DomainViewHandle { dirty: boolean; save(): Promise<boolean>; discard(): boolean | Promise<boolean> }
 export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(function DomainView({ domain }, ref) {
+  const notes = domain.definition.domainId === NOTES_DOMAIN;
+  const noteDialog = useRef<HTMLDialogElement>(null);
   const preset = isPresetDomain(domain.definition.domainId);
   const project = isProjectDomain(domain.definition.domainId);
   const checklist = domain.definition.domainId.startsWith("preset.checklist.");
@@ -73,12 +75,20 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
       } catch { setMessage("编辑保护暂不能确认，当前输入保留。"); }
     });
   }, [payload, dirty, recordId]);
+  useEffect(() => {
+    const dialog = noteDialog.current;
+    if (notes && baseSequence !== null && dialog && !dialog.open) dialog.showModal();
+    else if (baseSequence === null && dialog?.open) dialog.close();
+  }, [notes, baseSequence]);
   useImperativeHandle(ref, () => ({ get dirty() { return dirty || busy || uncertain || !!conflicts.current?.dirty; }, save, discard }));
   return <section className="card" data-testid="domain-view" data-project-task={project && kind === "task"}><h2>{domain.displayName ?? domain.definition.name}</h2>
     <p>当前展示本机成果，接续情况见同步状态。</p>
     {project && !checklist && <div role="group" aria-label="项目内容"><button disabled={busy || dirty} aria-pressed={kind === "idea"} onClick={() => setKind("idea")}>项目想法</button><button disabled={busy || dirty} aria-pressed={kind === "task"} onClick={() => setKind("task")}>项目待办</button></div>}
     <div hidden={baseSequence !== null} className={project && kind === "task" ? "project-entry" : undefined}>
-    {preset && <label>{project ? kind === "idea" ? "想法内容" : "待办内容" : "随记内容"}<textarea onKeyDown={e => { if (project && kind === "task" && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); void save(); } }} placeholder={project && kind === "task" ? "记下一件项目待办…" : undefined} aria-label={project ? kind === "idea" ? "想法内容" : "待办内容" : "随记内容"} value={String(payload.text ?? "")} disabled={busy || uncertain || conflictedIds.includes(recordId)} onChange={e => {
+    {notes && <label>标题（选填）<input aria-label="随记标题（选填）" value={String(payload.title ?? "")} disabled={busy || uncertain} onChange={event => {
+      setPayload({ ...payload, title: event.target.value, createdAt: payload.createdAt ?? new Date().toISOString() }); setDirty(true); setOperationId(crypto.randomUUID());
+    }} /></label>}
+    {preset && <label>{project ? kind === "idea" ? "想法内容" : "待办内容" : "正文（必填）"}<textarea required={notes} onKeyDown={e => { if (project && kind === "task" && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); void save(); } }} placeholder={project && kind === "task" ? "记下一件项目待办…" : undefined} aria-label={project ? kind === "idea" ? "想法内容" : "待办内容" : "随记内容"} value={String(payload.text ?? "")} disabled={busy || uncertain || conflictedIds.includes(recordId)} onChange={e => {
       setPayload({ ...payload, text: e.target.value, createdAt: payload.createdAt ?? new Date().toISOString(), ...(project ? { kind, completed: payload.completed ?? false } : {}) });
       setDirty(true); setOperationId(crypto.randomUUID());
     }} /></label>}
@@ -88,7 +98,7 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
         value={rule.type === "boolean" ? undefined : String(payload[field] ?? "")} checked={rule.type === "boolean" ? payload[field] === true : undefined} disabled={busy || uncertain || conflictedIds.includes(recordId)}
         onChange={(e) => { setPayload({ ...payload, [field]: rule.type === "boolean" ? e.target.checked : rule.type === "number" ? Number(e.target.value) : e.target.value }); setDirty(true); setOperationId(crypto.randomUUID()); }} /></label>;
     })}
-    <button className="domain-save" aria-label={uncertain ? "核对并重试原保存" : "保存领域内容"} disabled={busy || !dirty || conflictedIds.includes(recordId)} onClick={() => void save()}>{uncertain ? "核对并重试原保存" : "保存领域内容"}</button></div>
+    <button className="domain-save" aria-label={uncertain ? "核对并重试原保存" : "保存领域内容"} disabled={busy || !dirty || notes && !String(payload.text ?? "").trim() || conflictedIds.includes(recordId)} onClick={() => void save()}>{uncertain ? "核对并重试原保存" : "保存领域内容"}</button></div>
     {message && <p role="status">{message}</p>}
     {deleting && <div role="group" aria-label="确认删除领域内容"><p>确认删除此条内容？{deleting.recordId}</p><button disabled={busy} onClick={() => {
       setBusy(true);
@@ -101,11 +111,11 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
     <ul>{records.filter((record) => !record.deleted && (!project || record.payload?.kind === kind)).sort((a, b) => preset ? (project && kind === "task" ? Number(a.payload?.completed === true) - Number(b.payload?.completed === true) : 0) || String(b.payload?.createdAt ?? "").localeCompare(String(a.payload?.createdAt ?? "")) || a.recordId.localeCompare(b.recordId) : 0).map((record, index, visible) => <li key={record.recordId}>
       {project && kind === "task" && (index === 0 || visible[index - 1]?.payload?.completed !== record.payload?.completed) && <h3>{record.payload?.completed ? "已完成区" : "未完成"}</h3>}
       {project && kind === "task" && <span>{record.payload?.completed ? "已完成" : "未完成"} · </span>}
-      <div className="domain-record-content" tabIndex={0} onDoubleClick={() => void beginRecordEdit(record)} onKeyDown={e => { if (e.key === "Enter" && baseSequence === null) void beginRecordEdit(record); }}>
-      {recordId === record.recordId && baseSequence !== null ? <div onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && !uncertain && !busy) void save(); }} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); void discard(); } if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229 && preset) { e.preventDefault(); void save(); } }}>
+      <div className="domain-record-content" tabIndex={0} onClick={notes ? () => void beginRecordEdit(record) : undefined} onDoubleClick={notes ? undefined : () => void beginRecordEdit(record)} onKeyDown={e => { if (e.key === "Enter" && baseSequence === null) void beginRecordEdit(record); }}>
+      {!notes && recordId === record.recordId && baseSequence !== null ? <div onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && !uncertain && !busy) void save(); }} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); void discard(); } if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229 && preset) { e.preventDefault(); void save(); } }}>
         {preset ? <textarea aria-label="修改内容" autoFocus value={String(payload.text ?? "")} disabled={busy || uncertain} onChange={e => { setPayload({...payload,text:e.target.value}); setOperationId(crypto.randomUUID()); }} /> : domain.definition.view.fields.map(field => <label key={field}>{field}<input aria-label={"修改"+field} value={String(payload[field] ?? "")} disabled={busy || uncertain} onChange={e => { const rule = (domain.definition.schema.properties as JsonObject)[field] as JsonObject; setPayload({...payload,[field]:rule.type === "number" ? Number(e.target.value) : rule.type === "boolean" ? e.target.value === "true" : e.target.value}); setOperationId(crypto.randomUUID()); }}/></label>)}
         {uncertain && <button onClick={() => void save()}>核对并重试原保存</button>}
-      </div> : String(record.payload?.[domain.definition.view.titleField] ?? "")}
+      </div> : notes ? noteTitle(record.payload) : String(record.payload?.[domain.definition.view.titleField] ?? "")}
       </div>
       {project && kind === "task" && <input type="checkbox" aria-label={record.payload?.completed ? "恢复为未完成" : "完成"} checked={record.payload?.completed === true} disabled={busy || dirty || conflictedIds.includes(record.recordId)} onChange={() => {
         setBusy(true);
@@ -118,5 +128,15 @@ export const DomainView = forwardRef<DomainViewHandle, { domain: DomainEntry }>(
 
       {domain.definition.actions.includes("delete") && <button disabled={busy || dirty || conflictedIds.includes(record.recordId)} onClick={() => setDeleting({ recordId: record.recordId, operationId: crypto.randomUUID() })}>删除</button>}
     </li>)}</ul>
+    {notes && <dialog ref={noteDialog} className="note-details" aria-label="随记详情" onCancel={event => { event.preventDefault(); void discard(); }}>
+      <h2>随记详情</h2>
+      <label>标题（选填）<input aria-label="随记详情标题（选填）" value={String(payload.title ?? "")} disabled={busy || uncertain}
+        onChange={event => { setPayload({ ...payload, title: event.target.value }); setOperationId(crypto.randomUUID()); }} /></label>
+      <label>正文（必填）<textarea aria-label="随记正文" required value={String(payload.text ?? "")} disabled={busy || uncertain}
+        onChange={event => { setPayload({ ...payload, text: event.target.value }); setOperationId(crypto.randomUUID()); }} /></label>
+      {message && <p role="status">{message}</p>}
+      <button disabled={busy || !String(payload.text ?? "").trim()} onClick={() => void save()}>保存并关闭</button>
+      <button disabled={busy || uncertain} onClick={() => void discard()}>关闭</button>
+    </dialog>}
   </section>;
 });
